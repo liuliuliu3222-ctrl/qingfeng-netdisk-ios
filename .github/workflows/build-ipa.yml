@@ -11,30 +11,41 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # xcode-27 镜像默认 Xcode 27.1（/Applications/Xcode_27.1.app），带 iOS 27.1 SDK。
+    # 工程 IPHONEOS_DEPLOYMENT_TARGET = 26.0，产物最低系统仍为 iOS 26，不向下兼容。
+    runs-on: xcode-27
     timeout-minutes: 90
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode (27.1 → latest → 16.4)
+      - name: Select Xcode 27.1
         id: xcode
         run: |
           set -e
           ls /Applications | grep -i xcode || true
-          pick() { [ -d "/Applications/$1.app" ] && echo "/Applications/$1.app"; }
-          XCODE_PATH=$(pick Xcode_27.1 || pick Xcode_27 || true)
-          if [ -z "$XCODE_PATH" ]; then
+          if   [ -d "/Applications/Xcode_27.1.app" ];   then XCODE_PATH="/Applications/Xcode_27.1.app"
+          elif [ -d "/Applications/Xcode_27.1.0.app" ]; then XCODE_PATH="/Applications/Xcode_27.1.0.app"
+          else
+            echo "::warning::Xcode 27.1 is not preinstalled on this image; falling back to the image default"
             XCODE_PATH=$(xcode-select -p)
           fi
           echo "Using Xcode: $XCODE_PATH"
           sudo xcode-select -s "$XCODE_PATH"
+          XCODE_VER=$(xcodebuild -version | head -1)
+          echo "xcode=$XCODE_VER" >> "$GITHUB_OUTPUT"
           xcodebuild -version
           swiftc --version | head -1
 
       - name: Regenerate project (keeps pbxproj in sync with Swift files)
         run: python3 tools/gen_project.py
+
+      - name: Confirm iOS 26 deployment target
+        run: |
+          set -e
+          grep -n "IPHONEOS_DEPLOYMENT_TARGET = 26.0;" QingFengNetDisk.xcodeproj/project.pbxproj
+          grep -n "<string>26.0</string>" QingFengNetDisk/Info.plist
 
       - name: Build (Debug, simulator sanity check)
         run: |
@@ -69,6 +80,9 @@ jobs:
           test -d "$APP"
           VER=$( /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" )
           NUM=$( /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" )
+          MIN=$( /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist" )
+          echo "CFBundleShortVersionString=$VER  CFBundleVersion=$NUM  MinimumOSVersion=$MIN"
+          test "$MIN" = "26.0"
           NAME="QingFengNetDisk-v${VER}.ipa"
           mkdir -p Payload
           cp -R "$APP" Payload/
@@ -77,6 +91,7 @@ jobs:
           SHA=$( shasum -a 256 "$NAME" | awk '{print $1}' )
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "build=$NUM"  >> "$GITHUB_OUTPUT"
+          echo "minimum_os=$MIN" >> "$GITHUB_OUTPUT"
           echo "name=$NAME"   >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA"  >> "$GITHUB_OUTPUT"
           ls -la "$NAME"

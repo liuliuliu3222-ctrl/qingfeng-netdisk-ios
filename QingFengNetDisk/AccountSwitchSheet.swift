@@ -2,13 +2,16 @@ import UIKit
 import SwiftUI
 
 /// 切换账号（「我的 → 切换」进入）。
-/// 1:1 还原 3.2.0 该页面（对 3.2.0 截图逐像素测量重建）：
-/// - iOS insetGrouped 风格：系统分组灰底 + 白色圆角卡片（边距 16pt，圆角 10）
+/// 按目标截图（图2）逐像素测量 1:1 重建，与 3.2.0 版式的差异全部落地：
+/// - 系统分组灰底 + 白色卡片（左右边距 16pt，圆角 30pt；矮卡片自动收敛为胶囊）
 /// - 居中黑色标题「切换账号」（17pt 半粗体，无返回键）
-/// - 第一张卡片节标题（灰色 13pt）「已保存的账号」
-/// - 行：绿色渐变圆头像 24pt + 绿色用户名 17pt + 当前账号绿色对勾；行高 58pt，行内边距 18pt
-/// - 第二张卡片：绿色圆头像 + 绿色「添加新账号」
-/// 逻辑：点按账号直接切换；长按账号删除；添加账号确认后退出当前登录回到登录页。
+/// - 节标题「已保存的账号」17pt 半粗体、灰色 #85858B、左缩进 16pt（旧版为 13pt / 33pt）
+/// - 行：纯色 #2FAE7A 圆头像 24pt + 白色 person.fill 人像剪影 + 绿色用户名 17pt
+///   + 当前账号绿色对勾；行高 58pt，行内边距 18pt（旧版为渐变圆 + 首字母）
+/// - 多账号同卡展示，行间 1pt 分隔线 #E7E7E8（leading 52pt / trailing 16pt）
+/// - 第二张卡片：纯绿色线条 person.badge.plus（无圆形底）+ 绿色「添加新账号」
+///   （旧版为白色小图标套在渐变圆里）
+/// 逻辑不变：点按账号直接切换；长按账号删除；添加账号确认后退出当前登录回到登录页。
 struct AccountSwitchSheet: View {
 
     @EnvironmentObject private var session: SessionStore
@@ -17,14 +20,15 @@ struct AccountSwitchSheet: View {
     @State private var deletingAccount: String?
     @State private var showAddConfirm = false
 
-    // 3.2.0 原版配色（实测）
-    private let qfGreen = Color(red: 0.19, green: 0.71, blue: 0.48)       // #30B57A
-    private let avatarTop = Color(red: 0.36, green: 0.78, blue: 0.61)
-    private let avatarBottom = Color(red: 0.18, green: 0.68, blue: 0.48)  // #2FAE7A
+    // 目标截图实测配色：全页面统一纯色 #2FAE7A，不再使用渐变
+    private let qfGreen = MD3.primary                              // 浅色 = #2FAE7A
+    private let sectionTitleColor = Color.adaptive(light: 0x85858B, dark: 0x98989F)
+    private let separatorColor = Color.adaptive(light: 0xE7E7E8, dark: 0x3A3A3C)
+    private let cardRadius: CGFloat = 30
 
     var body: some View {
         VStack(spacing: 0) {
-            // 居中标题（3.2.0 无返回按钮，下滑手势关闭）
+            // 居中标题（无返回按钮，下滑手势关闭）
             Text("切换账号")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color(uiColor: .label))
@@ -33,11 +37,11 @@ struct AccountSwitchSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // 节标题（灰色小字，与卡片左缘内缩对齐）
+                    // 节标题：17pt 半粗体，与卡片左缘内缩 16pt
                     Text("已保存的账号")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color(uiColor: .systemGray))
-                        .padding(.leading, 33)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(sectionTitleColor)
+                        .padding(.leading, 16)
                         .padding(.bottom, 13)
 
                     accountCard
@@ -78,7 +82,7 @@ struct AccountSwitchSheet: View {
         }
     }
 
-    // MARK: - 账号卡片（白卡圆角10，行高58，绿色头像+绿色用户名+绿色对勾）
+    // MARK: - 账号卡片（白卡圆角 30，行高 58，多账号同卡 + 分隔线）
 
     private var accountCard: some View {
         let accounts = session.accountsRevision >= 0 ? AppSettings.savedAccounts : []
@@ -95,32 +99,36 @@ struct AccountSwitchSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
                 .background(Color(uiColor: .systemBackground))
-                .cornerRadius(10)
+                .clipShape(RoundedRectangle(cornerRadius: cardRadius))
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(accounts.enumerated()), id: \.element) { index, account in
                         if index > 0 {
                             Divider()
-                                .overlay(Color(uiColor: .separator))
+                                .overlay(separatorColor)
                                 .padding(.leading, 52)
+                                .padding(.trailing, 16)
                         }
                         accountRow(account, isCurrent: account == AppSettings.username)
                     }
                 }
                 .background(Color(uiColor: .systemBackground))
-                .cornerRadius(10)
+                .clipShape(RoundedRectangle(cornerRadius: cardRadius))
             }
         }
     }
 
-    private func avatarCircle(_ content: some View) -> some View {
+    /// 纯色圆底 + 白色人像剪影（替代旧的渐变圆 + 首字母）
+    private var accountAvatar: some View {
         ZStack {
             Circle()
-                .fill(LinearGradient(colors: [avatarTop, avatarBottom],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(qfGreen)
                 .frame(width: 24, height: 24)
-            content
+            Image(systemName: "person.fill")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(.white)
         }
+        .frame(width: 24, height: 24)
     }
 
     private func accountRow(_ account: String, isCurrent: Bool) -> some View {
@@ -133,9 +141,7 @@ struct AccountSwitchSheet: View {
             }
         } label: {
             HStack(spacing: 12) {
-                avatarCircle(Text(String(account.prefix(1)).uppercased())
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white))
+                accountAvatar
                 Text(account)
                     .font(.system(size: 17))
                     .foregroundStyle(qfGreen)
@@ -161,16 +167,18 @@ struct AccountSwitchSheet: View {
         }
     }
 
-    // MARK: - 添加新账号卡片（绿色圆头像 + 绿色文字，同 3.2.0）
+    // MARK: - 添加新账号卡片（纯绿色线条图标，无圆形底）
 
     private var addAccountCard: some View {
         Button {
             showAddConfirm = true
         } label: {
             HStack(spacing: 12) {
-                avatarCircle(Image(systemName: "person.badge.plus")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white))
+                // 图标本身约 26pt 高；布局宽度仍按 24pt 计，使文字与账号行左缘对齐
+                Image(systemName: "person.badge.plus")
+                    .font(.system(size: 26, weight: .regular))
+                    .foregroundStyle(qfGreen)
+                    .frame(width: 24, alignment: .leading)
                 Text("添加新账号")
                     .font(.system(size: 17))
                     .foregroundStyle(qfGreen)
@@ -182,6 +190,6 @@ struct AccountSwitchSheet: View {
         }
         .buttonStyle(.plain)
         .background(Color(uiColor: .systemBackground))
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
     }
 }
