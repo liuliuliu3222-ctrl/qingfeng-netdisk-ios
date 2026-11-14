@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B8EFC3912B3AA87C2E1EC23D /* AccountSwitchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6EE45204C717E699C7BC05 /* AccountSwitchSheet.swift */; };
 		97486ACE1967DBA2230C43C6 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBE53224E284B9EB16E6137F /* ApiClient.swift */; };
 		241B25AF160AF36971CCFFB3 /* AppEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAF23FCB0FAE5CB6B4510E9 /* AppEntry.swift */; };
 		6EFD0BD827A14B26E5DB39B3 /* BrowserAndCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD9DA9D1322EE917BDE2B5F0 /* BrowserAndCategory.swift */; };
@@ -28,6 +29,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9E6EE45204C717E699C7BC05 /* AccountSwitchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSwitchSheet.swift; sourceTree = "<group>"; };
 		EBE53224E284B9EB16E6137F /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
 		1FAF23FCB0FAE5CB6B4510E9 /* AppEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEntry.swift; sourceTree = "<group>"; };
 		DD9DA9D1322EE917BDE2B5F0 /* BrowserAndCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserAndCategory.swift; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 		EFF0382F83C90C0033198163 /* QingFengNetDisk */ = {
 			isa = PBXGroup;
 			children = (
+				9E6EE45204C717E699C7BC05 /* AccountSwitchSheet.swift */,
 				EBE53224E284B9EB16E6137F /* ApiClient.swift */,
 				1FAF23FCB0FAE5CB6B4510E9 /* AppEntry.swift */,
 				DD9DA9D1322EE917BDE2B5F0 /* BrowserAndCategory.swift */,
@@ -172,6 +175,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B8EFC3912B3AA87C2E1EC23D /* AccountSwitchSheet.swift in Sources */,
 				97486ACE1967DBA2230C43C6 /* ApiClient.swift in Sources */,
 				241B25AF160AF36971CCFFB3 /* AppEntry.swift in Sources */,
 				6EFD0BD827A14B26E5DB39B3 /* BrowserAndCategory.swift in Sources */,

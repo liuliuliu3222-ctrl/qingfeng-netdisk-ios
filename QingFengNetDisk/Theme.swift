@@ -227,26 +227,68 @@ private struct GlassDockBar: View {
     let items: [MDNavigationBar.Item]
     @Binding var selection: Int
     @Namespace private var glassNS
+    @State private var dragOffset: CGSize = .zero
+    @State private var isPickedUp = false
+    @State private var hapticReady = false
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(items.indices, id: \.self) { index in
-                dockItem(index)
+        GlassEffectContainer(spacing: 28) {
+            HStack(spacing: 2) {
+                ForEach(items.indices, id: \.self) { index in
+                    dockItem(index)
+                }
             }
+            .padding(.horizontal, 10)
+            .padding(.top, 9)
+            .padding(.bottom, 9)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 32))
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .modifier(LiquidGlassModifier())
+        .scaleEffect(isPickedUp ? 1.05 : 1.0)
+        .offset(dragOffset)
+        .shadow(color: Color.black.opacity(isPickedUp ? 0.22 : 0.12),
+                radius: isPickedUp ? 22 : 14, x: 0, y: isPickedUp ? 10 : 6)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPickedUp)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selection)
+        // 长按拾起后可拖动（iOS 26 液态玻璃原生手感）
+        .gesture(
+            LongPressGesture(minimumDuration: 0.35)
+                .sequenced(before: DragGesture())
+                .onChanged { value in
+                    switch value {
+                    case .first(true):
+                        if !isPickedUp {
+                            isPickedUp = true
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }
+                    case .second(true, let drag?):
+                        if !hapticReady {
+                            hapticReady = true
+                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                        }
+                        dragOffset = drag.translation
+                    default:
+                        break
+                    }
+                }
+                .onEnded { _ in
+                    isPickedUp = false
+                    hapticReady = false
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
+                        dragOffset = .zero
+                    }
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+        )
     }
 
     @ViewBuilder
     private func dockItem(_ index: Int) -> some View {
         let active = selection == index
         Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
                 selection = index
             }
+            UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: active ? items[index].activeIcon : items[index].icon)
@@ -262,32 +304,21 @@ private struct GlassDockBar: View {
             .padding(.vertical, 7)
             .background {
                 if active {
+                    // 选中态液态玻璃胶囊：glassEffectID 让它随切换“流动”到新位置
                     Capsule()
-                        .fill(MD3.primary.opacity(0.16))
+                        .glassEffect(.regular.interactive(), in: Capsule())
+                        .glassEffectID("dock-selection-pill", in: glassNS)
                         .overlay(
-                            Capsule()
-                                .strokeBorder(
-                                    LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.08)],
-                                                   startPoint: .top,
-                                                   endPoint: .bottom),
-                                    lineWidth: 0.8)
+                            Capsule().strokeBorder(
+                                LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.10)],
+                                               startPoint: .top, endPoint: .bottom),
+                                lineWidth: 0.8)
                         )
-                        .matchedGeometryEffect(id: "dock-selection", in: glassNS)
                 }
             }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// Liquid Glass 主修饰：iOS 26 起使用系统玻璃材质，圆角 30 的悬浮胶囊容器
-@available(iOS 26.0, *)
-private struct LiquidGlassModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 30))
-            .shadow(color: Color.black.opacity(0.10), radius: 14, x: 0, y: 6)
     }
 }
 #endif
