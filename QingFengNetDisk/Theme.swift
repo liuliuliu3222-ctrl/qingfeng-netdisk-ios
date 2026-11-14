@@ -227,93 +227,47 @@ private struct GlassDockBar: View {
     let items: [MDNavigationBar.Item]
     @Binding var selection: Int
     @Namespace private var glassNS
-    @State private var dragOffset: CGSize = .zero
-    @State private var isPickedUp = false
-    @State private var hapticReady = false
 
     var body: some View {
-        GlassEffectContainer(spacing: 28) {
-            HStack(spacing: 2) {
+        // 系统级液态玻璃容器：原生 Liquid Glass 渲染管线，不叠加任何自定义材质
+        GlassEffectContainer(spacing: 24) {
+            HStack(spacing: 0) {
                 ForEach(items.indices, id: \.self) { index in
                     dockItem(index)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 9)
-            .padding(.bottom, 9)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 32))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 33))
         }
-        .scaleEffect(isPickedUp ? 1.05 : 1.0)
-        .offset(dragOffset)
-        .shadow(color: Color.black.opacity(isPickedUp ? 0.22 : 0.12),
-                radius: isPickedUp ? 22 : 14, x: 0, y: isPickedUp ? 10 : 6)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPickedUp)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selection)
-        // 长按拾起后可拖动（iOS 26 液态玻璃原生手感）
-        .gesture(
-            LongPressGesture(minimumDuration: 0.35)
-                .sequenced(before: DragGesture())
-                .onChanged { value in
-                    switch value {
-                    case .first(true):
-                        if !isPickedUp {
-                            isPickedUp = true
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        }
-                    case .second(true, let drag?):
-                        if !hapticReady {
-                            hapticReady = true
-                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-                        }
-                        dragOffset = drag.translation
-                    default:
-                        break
-                    }
-                }
-                .onEnded { _ in
-                    isPickedUp = false
-                    hapticReady = false
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
-                        dragOffset = .zero
-                    }
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                }
-        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: selection)
     }
 
     @ViewBuilder
     private func dockItem(_ index: Int) -> some View {
         let active = selection == index
         Button {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
-                selection = index
-            }
-            UISelectionFeedbackGenerator().selectionChanged()
+            selection = index
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: active ? items[index].activeIcon : items[index].icon)
                     .font(.system(size: 19, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(active ? MD3.primary : MD3.onSurfaceVariant)
-                    .scaleEffect(active ? 1.06 : 1.0)
+                    .foregroundStyle(active ? Color.accentColor : MD3.onSurfaceVariant)
                 Text(items[index].title)
                     .font(.system(size: 10.5, weight: active ? .semibold : .regular))
                     .foregroundStyle(active ? MD3.onSurface : MD3.onSurfaceVariant)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .background {
                 if active {
-                    // 选中态液态玻璃胶囊：glassEffectID 让它随切换“流动”到新位置
+                    // 选中态：系统液态玻璃胶囊，glassEffectID 驱动液态流动动画
                     Capsule()
                         .glassEffect(.regular.interactive(), in: Capsule())
-                        .glassEffectID("dock-selection-pill", in: glassNS)
-                        .overlay(
-                            Capsule().strokeBorder(
-                                LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.10)],
-                                               startPoint: .top, endPoint: .bottom),
-                                lineWidth: 0.8)
-                        )
+                        .glassEffectID("dock-pill", in: glassNS)
                 }
             }
             .contentShape(Capsule())

@@ -124,64 +124,46 @@ struct AccountSwitchSheet: View {
     }
 
     private func accountRow(_ account: String, isCurrent: Bool) -> some View {
-        HStack(spacing: 14) {
-            // 主区域：点按切换
-            Button {
+        Button {
+            if isCurrent {
+                ToastCentre.shared.show("当前已登录该账号")
+            } else {
+                session.switchAccount(to: account)
+                dismiss()
+            }
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(isCurrent ? MD3.primary : MD3.primaryContainer)
+                        .frame(width: 40, height: 40)
+                    Text(String(account.prefix(1)).uppercased())
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(isCurrent ? MD3.onPrimary : MD3.onPrimaryContainer)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(account)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(MD3.onSurface)
+                        .lineLimit(1)
+                    Text(isCurrent
+                         ? "当前登录"
+                         : AppSettings.hasPasswordSaved(for: account) ? "已保存密码" : "未保存密码")
+                        .font(.system(size: 12))
+                        .foregroundStyle(isCurrent ? MD3.primary : MD3.onSurfaceVariant)
+                }
+                Spacer(minLength: 6)
                 if isCurrent {
-                    ToastCentre.shared.show("当前已登录该账号")
-                } else {
-                    session.switchAccount(to: account)
-                    dismiss()
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(MD3.primary)
                 }
-            } label: {
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(isCurrent ? MD3.primary : MD3.primaryContainer)
-                            .frame(width: 40, height: 40)
-                        Text(String(account.prefix(1)).uppercased())
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(isCurrent ? MD3.onPrimary : MD3.onPrimaryContainer)
-                    }
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(account)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(MD3.onSurface)
-                            .lineLimit(1)
-                        Text(isCurrent
-                             ? "当前登录"
-                             : AppSettings.hasPasswordSaved(for: account) ? "已保存密码" : "未保存密码")
-                            .font(.system(size: 12))
-                            .foregroundStyle(isCurrent ? MD3.primary : MD3.onSurfaceVariant)
-                    }
-                    Spacer(minLength: 6)
-                    if isCurrent {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(MD3.primary)
-                    }
-                }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-
-            // 右侧删除按钮
-            Button {
-                deletingAccount = account
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(MD3.error)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(MD3.errorContainer.opacity(0.5)))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("删除账号 \(account)")
+            .padding(.horizontal, 16)
+            .frame(height: 64)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .frame(height: 64)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
         .contextMenu {
             Button(role: .destructive) {
                 deletingAccount = account

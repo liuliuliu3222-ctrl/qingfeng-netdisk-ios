@@ -20,7 +20,7 @@ struct MineView: View {
     var body: some View {
         VStack(spacing: 0) {
             MDTopAppBar(title: "我的",
-                       subtitle: "清风网盘 3.2.2",
+                       subtitle: "清风网盘 3.3.0",
                        trailing: AnyView(MDIconButton(icon: "gearshape") { showSettings = true }))
 
             ScrollView {
@@ -107,9 +107,6 @@ struct MineView: View {
                 }
                 .buttonStyle(.plain)
 
-                // 切换账号入口（3.2.0 同款：头像旁边的小按钮）
-                switchButton
-
                 VStack(alignment: .leading, spacing: 5) {
                     Text(session.me.username.isEmpty ? AppSettings.username : session.me.username)
                         .font(.system(size: 18, weight: .bold))
@@ -128,13 +125,14 @@ struct MineView: View {
                     .clipShape(Capsule())
                 }
                 Spacer(minLength: 0)
+                // 切换账号按钮（原升级按钮的位置）
                 Button {
-                    showMember = true
+                    showAccountSwitch = true
                 } label: {
                     VStack(spacing: 2) {
-                        Image(systemName: "arrow.up.right")
+                        Image(systemName: "person.2.fill")
                             .font(.system(size: 13, weight: .bold))
-                        Text("升级")
+                        Text("切换")
                             .font(.system(size: 10, weight: .semibold))
                     }
                     .foregroundStyle(MD3.primary)
@@ -143,27 +141,9 @@ struct MineView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("切换账号")
             }
         }
-    }
-
-    /// 切换账号按钮（头像旁边，点按进入账号管理二级页）
-    private var switchButton: some View {
-        Button {
-            showAccountSwitch = true
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(MD3.primaryContainer)
-                    .frame(width: 30, height: 30)
-                Image(systemName: "person.2.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(MD3.onPrimaryContainer)
-            }
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("切换账号")
     }
 
     private var avatarLetter: String {
