@@ -36,46 +36,28 @@ struct RootView: View {
     }
 }
 
-/// 主框架：MD3 顶部栏 + 内容 + 底部导航 + FAB
+/// 主框架：系统 TabView（iOS 26 原生液态玻璃底栏）
 struct MainTabView: View {
 
     @EnvironmentObject private var session: SessionStore
 
     @State private var selection = 0
 
-    private let navigationItems: [MDNavigationBar.Item] = [
-        .init(title: "首页", icon: "house", activeIcon: "house.fill"),
-        .init(title: "文件", icon: "folder", activeIcon: "folder.fill"),
-        .init(title: "传输", icon: "arrow.up.arrow.down", activeIcon: "arrow.up.arrow.down.circle.fill"),
-        .init(title: "我的", icon: "person", activeIcon: "person.fill")
-    ]
-
     var body: some View {
-        ZStack {
-            // 内容区域（四个页面常驻）
-            ZStack {
-                HomeView(switchToFiles: { selection = 1 })
-                    .opacity(selection == 0 ? 1 : 0)
-                    .allowsHitTesting(selection == 0)
-                FilesView()
-                    .opacity(selection == 1 ? 1 : 0)
-                    .allowsHitTesting(selection == 1)
-                TransferView()
-                    .opacity(selection == 2 ? 1 : 0)
-                    .allowsHitTesting(selection == 2)
-                MineView(switchToFiles: { selection = 1 })
-                    .opacity(selection == 3 ? 1 : 0)
-                    .allowsHitTesting(selection == 3)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            // 悬浮底栏（iOS 26 液态玻璃 / 旧系统 MD3 回退）
-            VStack {
-                Spacer()
-                LiquidGlassDockBar(items: navigationItems, selection: $selection)
-            }
+        TabView(selection: $selection) {
+            HomeView(switchToFiles: { selection = 1 })
+                .tabItem { Label("首页", systemImage: "house") }
+                .tag(0)
+            FilesView()
+                .tabItem { Label("文件", systemImage: "folder") }
+                .tag(1)
+            TransferView()
+                .tabItem { Label("传输", systemImage: "arrow.up.arrow.down") }
+                .tag(2)
+            MineView(switchToFiles: { selection = 1 })
+                .tabItem { Label("我的", systemImage: "person") }
+                .tag(3)
         }
-        .background(MD3.background)
         .task {
             Notifier.requestAuthorization()
             await session.refreshProfile()

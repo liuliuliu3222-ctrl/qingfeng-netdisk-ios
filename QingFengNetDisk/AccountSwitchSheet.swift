@@ -1,29 +1,28 @@
 import UIKit
 import SwiftUI
 
-/// 切换账号页面（「我的 → 切换按钮」进入）。
-/// - 列表展示本机已保存的账号，点按直接切换登录
-/// - 长按账号弹出「删除该账号」确认
-/// - 顶部「添加账号」：退出当前登录，回到登录页添加新账号
+/// 已保存的账号（「我的 → 切换」进入）。
+/// 1:1 还原 3.2.0 的二级页面：标题「已保存的账号」+ 纯账号列表。
+/// - 点按账号：直接切换登录（无需重输密码）
+/// - 长按账号：弹出「删除该账号」确认
+/// - 删除当前登录账号会同时退出登录
 struct AccountSwitchSheet: View {
 
     @EnvironmentObject private var session: SessionStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var deletingAccount: String?
-    @State private var showAddConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
             MDTopAppBar(title: "切换账号",
-                        subtitle: "点按登录 · 长按删除",
+                        subtitle: "已保存的账号",
                         showsBack: true,
                         onBack: { dismiss() })
 
             ScrollView {
                 VStack(spacing: 14) {
                     accountListCard
-                    hintCard
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 28)
@@ -45,62 +44,19 @@ struct AccountSwitchSheet: View {
                  ? "这是当前登录的账号，删除后将同时退出登录。"
                  : "将同时删除本机保存的密码；下次使用需重新输入。")
         }
-        .confirmationDialog("添加新账号",
-                            isPresented: $showAddConfirm,
-                            titleVisibility: .visible) {
-            Button("退出当前并去登录") {
-                dismiss()
-                session.logout()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("将退出当前账号并回到登录页，登录新账号后会自动保存在这里。当前账号仍会保留在列表中。")
-        }
     }
 
-    // MARK: - 账号列表
+    // MARK: - 账号列表（3.2.0 原版样式）
 
     private var accountListCard: some View {
         let accounts = session.accountsRevision >= 0 ? AppSettings.savedAccounts : []
         return MDCard(padding: 0) {
             VStack(spacing: 0) {
-                // 添加新账号入口
-                Button {
-                    showAddConfirm = true
-                } label: {
-                    HStack(spacing: 14) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(MD3.primary)
-                                .frame(width: 40, height: 40)
-                            Image(systemName: "plus")
-                                .font(.system(size: 17, weight: .bold))
-                                .foregroundStyle(MD3.onPrimary)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("添加账号")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(MD3.primary)
-                            Text("退出当前，登录新的账号")
-                                .font(.system(size: 11))
-                                .foregroundStyle(MD3.onSurfaceVariant)
-                        }
-                        Spacer(minLength: 6)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(MD3.onSurfaceVariant.opacity(0.7))
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(height: 62)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
                 if accounts.isEmpty {
-                    Divider().overlay(MD3.outlineVariant)
                     VStack(spacing: 8) {
                         Image(systemName: "person.crop.circle.badge.exclamationmark")
                             .font(.system(size: 30, weight: .light))
+                            .foregroundStyle(MD3.onSurfaceVariant.opacity(0.6))
                         Text("还没有已保存的账号")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(MD3.onSurfaceVariant)
@@ -108,12 +64,13 @@ struct AccountSwitchSheet: View {
                             .font(.system(size: 12))
                             .foregroundStyle(MD3.onSurfaceVariant.opacity(0.8))
                     }
-                    .foregroundStyle(MD3.onSurfaceVariant.opacity(0.6))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
                 } else {
                     ForEach(Array(accounts.enumerated()), id: \.element) { index, account in
-                        Divider().overlay(MD3.outlineVariant).padding(.leading, 60)
+                        if index > 0 {
+                            Divider().overlay(MD3.outlineVariant).padding(.leading, 60)
+                        }
                         accountRow(account, isCurrent: account == AppSettings.username)
                     }
                 }
@@ -167,28 +124,6 @@ struct AccountSwitchSheet: View {
                 deletingAccount = account
             } label: {
                 Label("删除该账号", systemImage: "trash")
-            }
-        }
-    }
-
-    // MARK: - 提示
-
-    private var hintCard: some View {
-        MDCard(padding: 14) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(MD3.primary)
-                    .padding(.top, 2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("关于账号管理")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(MD3.onSurface)
-                    Text("密码仅保存在本机 Keychain，不会上传。删除账号只是移除本机记录，服务器上的文件不受影响。")
-                        .font(.system(size: 12))
-                        .foregroundStyle(MD3.onSurfaceVariant)
-                }
-                Spacer(minLength: 0)
             }
         }
     }

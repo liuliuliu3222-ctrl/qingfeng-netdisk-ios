@@ -20,7 +20,7 @@ struct MineView: View {
     var body: some View {
         VStack(spacing: 0) {
             MDTopAppBar(title: "我的",
-                       subtitle: "清风网盘 3.3.1",
+                       subtitle: "清风网盘 3.4.0",
                        trailing: AnyView(MDIconButton(icon: "gearshape") { showSettings = true }))
 
             ScrollView {
