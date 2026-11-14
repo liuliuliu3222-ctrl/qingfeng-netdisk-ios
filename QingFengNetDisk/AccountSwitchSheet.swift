@@ -2,7 +2,7 @@ import UIKit
 import SwiftUI
 
 /// 已保存的账号（「我的 → 切换」进入）。
-/// 1:1 还原 3.2.0 的二级页面：标题「已保存的账号」+ 纯账号列表。
+/// UI 与逻辑完全照抄 3.2.0：中性配色，无绿色元素。
 /// - 点按账号：直接切换登录（无需重输密码）
 /// - 长按账号：弹出「删除该账号」确认
 /// - 删除当前登录账号会同时退出登录
@@ -15,8 +15,7 @@ struct AccountSwitchSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MDTopAppBar(title: "切换账号",
-                        subtitle: "已保存的账号",
+            MDTopAppBar(title: "已保存的账号",
                         showsBack: true,
                         onBack: { dismiss() })
 
@@ -46,7 +45,7 @@ struct AccountSwitchSheet: View {
         }
     }
 
-    // MARK: - 账号列表（3.2.0 原版样式）
+    // MARK: - 账号列表（3.2.0 原版中性样式）
 
     private var accountListCard: some View {
         let accounts = session.accountsRevision >= 0 ? AppSettings.savedAccounts : []
@@ -60,9 +59,6 @@ struct AccountSwitchSheet: View {
                         Text("还没有已保存的账号")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(MD3.onSurfaceVariant)
-                        Text("登录成功后会自动记住，之后可在这里一键切换")
-                            .font(.system(size: 12))
-                            .foregroundStyle(MD3.onSurfaceVariant.opacity(0.8))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
@@ -78,6 +74,7 @@ struct AccountSwitchSheet: View {
         }
     }
 
+    /// 中性行：灰色头像圈 + 用户名 + 当前账号灰色对勾，无任何绿色
     private func accountRow(_ account: String, isCurrent: Bool) -> some View {
         Button {
             if isCurrent {
@@ -90,32 +87,25 @@ struct AccountSwitchSheet: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle()
-                        .fill(isCurrent ? MD3.primary : MD3.primaryContainer)
+                        .fill(MD3.surfaceContainerHigh)
                         .frame(width: 40, height: 40)
                     Text(String(account.prefix(1)).uppercased())
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(isCurrent ? MD3.onPrimary : MD3.onPrimaryContainer)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(account)
-                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(MD3.onSurface)
-                        .lineLimit(1)
-                    Text(isCurrent
-                         ? "当前登录"
-                         : AppSettings.hasPasswordSaved(for: account) ? "已保存密码" : "未保存密码")
-                        .font(.system(size: 12))
-                        .foregroundStyle(isCurrent ? MD3.primary : MD3.onSurfaceVariant)
                 }
+                Text(account)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(MD3.onSurface)
+                    .lineLimit(1)
                 Spacer(minLength: 6)
                 if isCurrent {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(MD3.primary)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(MD3.onSurfaceVariant)
                 }
             }
             .padding(.horizontal, 16)
-            .frame(height: 64)
+            .frame(height: 60)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
