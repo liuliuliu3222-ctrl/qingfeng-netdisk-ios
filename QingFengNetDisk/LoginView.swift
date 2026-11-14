@@ -94,7 +94,7 @@ struct LoginView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("清风网盘 iOS 版 · 3.4.1")
+                Text("清风网盘 iOS 版 · 3.4.2")
                     .font(.system(size: 11))
                     .foregroundStyle(MD3.onSurfaceVariant.opacity(0.7))
             }
