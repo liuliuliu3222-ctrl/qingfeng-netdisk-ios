@@ -194,18 +194,7 @@ struct MDTopAppBar: View {
 
 // MARK: - iOS 26 液态玻璃（Liquid Glass）
 
-/// 判断运行环境是否支持 iOS 26 的 Liquid Glass API
-enum LiquidGlassSupport {
-    static let is26: Bool = {
-        if #available(iOS 26.0, *) { return true }
-        return false
-    }()
-}
-
-/// iOS 26 Liquid Glass 底栏容器。
-/// - iOS 26+：使用系统 glassEffect(.regular) 液态玻璃 + glassEffectUnion 融合胶囊；
-///   选中态使用带玻璃高光滑动胶囊指示器。
-/// - iOS 16–25：回退到 MD3 surfaceContainer 卡片，保持原有观感。
+/// 底栏容器：iOS 26+ 走系统原生液态玻璃 TabDock，iOS 16–25 回退 MD3。
 struct LiquidGlassDockBar: View {
     let items: [MDNavigationBar.Item]
     @Binding var selection: Int
@@ -213,7 +202,7 @@ struct LiquidGlassDockBar: View {
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
-                GlassDockBar(items: items, selection: $selection)
+                NativeGlassTabDock(items: items, selection: $selection)
             } else {
                 LegacyDockBar(items: items, selection: $selection)
             }
@@ -222,57 +211,53 @@ struct LiquidGlassDockBar: View {
 }
 
 #if canImport(UIKit)
+/// 完全交给系统渲染的液态玻璃 Dock（iOS 26+）。
+/// 结构模仿系统 TabView：每一项都是带 .glassEffect 的按钮，
+/// 选中态用独立玻璃胶囊 + glassEffectID，液态流动动画由系统驱动；
+/// 容器 GlassEffectContainer 负责让所有玻璃元素互相融合，
+/// 没有任何自定义材质、描边、阴影或手势。
 @available(iOS 26.0, *)
-private struct GlassDockBar: View {
+struct NativeGlassTabDock: View {
     let items: [MDNavigationBar.Item]
     @Binding var selection: Int
     @Namespace private var glassNS
 
     var body: some View {
-        // 系统级液态玻璃容器：原生 Liquid Glass 渲染管线，不叠加任何自定义材质
-        GlassEffectContainer(spacing: 24) {
-            HStack(spacing: 0) {
+        GlassEffectContainer(spacing: 20) {
+            HStack(spacing: 4) {
                 ForEach(items.indices, id: \.self) { index in
-                    dockItem(index)
+                    tabItem(index)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 6)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 33))
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
-        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: selection)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 28))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
     }
 
     @ViewBuilder
-    private func dockItem(_ index: Int) -> some View {
+    private func tabItem(_ index: Int) -> some View {
         let active = selection == index
         Button {
             selection = index
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 Image(systemName: active ? items[index].activeIcon : items[index].icon)
-                    .font(.system(size: 19, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(active ? Color.accentColor : MD3.onSurfaceVariant)
+                    .font(.system(size: 18, weight: .semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(active ? Color.accentColor : Color.secondary)
                 Text(items[index].title)
-                    .font(.system(size: 10.5, weight: active ? .semibold : .regular))
-                    .foregroundStyle(active ? MD3.onSurface : MD3.onSurfaceVariant)
+                    .font(.system(size: 10, weight: active ? .semibold : .regular))
+                    .foregroundStyle(active ? Color.primary : Color.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background {
-                if active {
-                    // 选中态：系统液态玻璃胶囊，glassEffectID 驱动液态流动动画
-                    Capsule()
-                        .glassEffect(.regular.interactive(), in: Capsule())
-                        .glassEffectID("dock-pill", in: glassNS)
-                }
-            }
-            .contentShape(Capsule())
+            .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 24))
+        .glassEffectID("tab-\(index)", in: glassNS)
     }
 }
 #endif
