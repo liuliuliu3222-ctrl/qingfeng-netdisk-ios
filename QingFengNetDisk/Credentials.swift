@@ -48,6 +48,11 @@ enum KeychainStore {
 // MARK: - 应用设置（对应 APK 的 com.qingfeng.netdisk.Prefs）
 
 enum AppSettings {
+    /// 界面展示用版本号：直接读 Info.plist，避免多处硬编码不同步
+    static var appVersion: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
+    }
+
     /// 原 APK 内置的默认服务器，可在设置页修改
     static let defaultServer = "https://a131653141fe81eec.app.workbuddy.host"
     /// 原 APK 内置的默认分享码

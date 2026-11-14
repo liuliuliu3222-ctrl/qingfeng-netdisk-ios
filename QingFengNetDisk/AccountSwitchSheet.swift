@@ -11,14 +11,15 @@ import SwiftUI
 /// - 多账号同卡展示，行间 1pt 分隔线 #E7E7E8（leading 52pt / trailing 16pt）
 /// - 第二张卡片：纯绿色线条 person.badge.plus（无圆形底）+ 绿色「添加新账号」
 ///   （旧版为白色小图标套在渐变圆里）
-/// 逻辑不变：点按账号直接切换；长按账号删除；添加账号确认后退出当前登录回到登录页。
+/// 逻辑：点按账号直接切换；长按账号删除；「添加新账号」不再弹确认框、不再退出登录，
+/// 直接以可关闭的全屏登录页呈现（隐藏已保存账号栏、带返回按钮），当前会话始终保留。
 struct AccountSwitchSheet: View {
 
     @EnvironmentObject private var session: SessionStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var deletingAccount: String?
-    @State private var showAddConfirm = false
+    @State private var showAddAccountLogin = false
 
     // 目标截图实测配色：全页面统一纯色 #2FAE7A，不再使用渐变
     private let qfGreen = MD3.primary                              // 浅色 = #2FAE7A
@@ -56,14 +57,21 @@ struct AccountSwitchSheet: View {
             }
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .confirmationDialog("退出当前账号？",
-                            isPresented: $showAddConfirm,
-                            titleVisibility: .visible) {
-            Button("退出后需要重新输入账号密码", role: .destructive) {
-                session.logout()
-                dismiss()
-            }
-            Button("取消", role: .cancel) {}
+        // 「添加新账号」：不弹窗、不退出登录，直接前往登录页。
+        // 全屏覆盖而非替换 root，所以点「返回」即可回到本页，再下滑即回云盘。
+        .fullScreenCover(isPresented: $showAddAccountLogin) {
+            LoginView(addAccountMode: true,
+                      onClose: {
+                          showAddAccountLogin = false
+                      },
+                      onSignedIn: {
+                          // 登录成功已切到新账号：先收起登录页，再收起本页回到云盘
+                          showAddAccountLogin = false
+                          DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                              dismiss()
+                          }
+                      })
+                .environmentObject(session)
         }
         .confirmationDialog("删除账号",
                             isPresented: .init(get: { deletingAccount != nil },
@@ -171,7 +179,7 @@ struct AccountSwitchSheet: View {
 
     private var addAccountCard: some View {
         Button {
-            showAddConfirm = true
+            showAddAccountLogin = true
         } label: {
             HStack(spacing: 12) {
                 // 图标本身约 26pt 高；布局宽度仍按 24pt 计，使文字与账号行左缘对齐

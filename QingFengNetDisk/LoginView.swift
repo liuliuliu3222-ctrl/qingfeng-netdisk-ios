@@ -4,6 +4,16 @@ struct LoginView: View {
 
     @EnvironmentObject private var session: SessionStore
 
+    /// 「切换账号 → 添加新账号」进入的模式：
+    /// - 不展示「已保存的账号」栏，只保留账号登录
+    /// - 顶部固定返回按钮，随时可返回上级页面
+    /// - 不动当前登录会话，因此不登录也能原样回到云盘
+    var addAccountMode: Bool = false
+    /// 点击返回：由呈现方关闭本页
+    var onClose: (() -> Void)? = nil
+    /// 登录 / 注册成功：由呈现方关闭本页并回到云盘（此时已切到新账号）
+    var onSignedIn: (() -> Void)? = nil
+
     @State private var username = ""
     @State private var password = ""
     @State private var registerMode = false
@@ -13,100 +23,134 @@ struct LoginView: View {
     @State private var showSettings = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                header
-
-                if AppSettings.hasSavedAccounts {
-                    SavedAccountsCard(session: session)
-                }
-
-                MDCard(radius: MD3.radiusExtraLarge, padding: 20) {
-                    VStack(spacing: 16) {
-                        HStack(spacing: 6) {
-                            Text(registerMode ? "创建账号" : "账号登录")
-                                .font(.system(size: 17, weight: .bold))
-                                .foregroundStyle(MD3.onSurface)
-                            Spacer()
-                            Text(AppSettings.sharecode)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(MD3.onPrimaryContainer)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(MD3.primaryContainer)
-                                .clipShape(Capsule())
-                        }
-
-                        MDTextField(title: "用户名",
-                                    text: $username,
-                                    icon: "person",
-                                    keyboard: .default,
-                                    submitLabel: .next)
-
-                        MDTextField(title: "密码",
-                                    text: $password,
-                                    icon: "lock",
-                                    secure: true,
-                                    submitLabel: .go,
-                                    onSubmit: submit)
-
-                        if !message.isEmpty {
-                            HStack(spacing: 6) {
-                                Image(systemName: isError ? "exclamationmark.circle" : "info.circle")
-                                    .font(.system(size: 13))
-                                Text(message)
-                                    .font(.system(size: 13))
-                                    .multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
-                            }
-                            .foregroundStyle(isError ? MD3.error : MD3.onSurfaceVariant)
-                        }
-
-                        MDPrimaryButton(title: registerMode ? "注册并进入" : "登录",
-                                        icon: nil,
-                                        enabled: !busy,
-                                        action: submit)
-
-                        Button {
-                            registerMode.toggle()
-                            message = ""
-                            isError = false
-                        } label: {
-                            Text(registerMode ? "已有账号？去登录" : "还没有账号？去注册")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(MD3.primary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                Button {
-                    showSettings = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "server.rack").font(.system(size: 12))
-                        Text("服务器地址：\(AppSettings.server)")
-                            .lineLimit(1)
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                    }
-                    .font(.system(size: 12))
-                    .foregroundStyle(MD3.onSurfaceVariant)
-                }
-                .buttonStyle(.plain)
-
-                Text("清风网盘 iOS 版 · 3.4.3")
-                    .font(.system(size: 11))
-                    .foregroundStyle(MD3.onSurfaceVariant.opacity(0.7))
+        VStack(spacing: 0) {
+            if addAccountMode {
+                addAccountTopBar
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 48)
-            .padding(.bottom, 40)
+
+            ScrollView {
+                VStack(spacing: 20) {
+                    header
+
+                    // 添加账号模式：只保留账号登录，隐藏「已保存的账号」卡片
+                    if AppSettings.hasSavedAccounts && !addAccountMode {
+                        SavedAccountsCard(session: session)
+                    }
+
+                    MDCard(radius: MD3.radiusExtraLarge, padding: 20) {
+                        VStack(spacing: 16) {
+                            HStack(spacing: 6) {
+                                Text(registerMode ? "创建账号" : "账号登录")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(MD3.onSurface)
+                                Spacer()
+                                Text(AppSettings.sharecode)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(MD3.onPrimaryContainer)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(MD3.primaryContainer)
+                                    .clipShape(Capsule())
+                            }
+
+                            MDTextField(title: "用户名",
+                                        text: $username,
+                                        icon: "person",
+                                        keyboard: .default,
+                                        submitLabel: .next)
+
+                            MDTextField(title: "密码",
+                                        text: $password,
+                                        icon: "lock",
+                                        secure: true,
+                                        submitLabel: .go,
+                                        onSubmit: submit)
+
+                            if !message.isEmpty {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isError ? "exclamationmark.circle" : "info.circle")
+                                        .font(.system(size: 13))
+                                    Text(message)
+                                        .font(.system(size: 13))
+                                        .multilineTextAlignment(.leading)
+                                    Spacer(minLength: 0)
+                                }
+                                .foregroundStyle(isError ? MD3.error : MD3.onSurfaceVariant)
+                            }
+
+                            MDPrimaryButton(title: registerMode ? "注册并进入" : "登录",
+                                            icon: nil,
+                                            enabled: !busy,
+                                            action: submit)
+
+                            Button {
+                                registerMode.toggle()
+                                message = ""
+                                isError = false
+                            } label: {
+                                Text(registerMode ? "已有账号？去登录" : "还没有账号？去注册")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(MD3.primary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Button {
+                        showSettings = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "server.rack").font(.system(size: 12))
+                            Text("服务器地址：\(AppSettings.server)")
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(MD3.onSurfaceVariant)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text("清风网盘 iOS 版 · \(AppSettings.appVersion)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MD3.onSurfaceVariant.opacity(0.7))
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, addAccountMode ? 16 : 48)
+                .padding(.bottom, 40)
+            }
         }
         .background(MD3.background.ignoresSafeArea())
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(session)
         }
+    }
+
+    /// 固定顶部返回栏：不随内容滚动，任何时候都能返回上级页面
+    private var addAccountTopBar: some View {
+        HStack(spacing: 0) {
+            Button {
+                onClose?()
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("返回")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .foregroundStyle(MD3.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(MD3.primaryContainer)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("返回上级页面")
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     private func quickLogin(_ account: String) {
@@ -123,6 +167,7 @@ struct LoginView: View {
                 session.signIn(token: token, username: account, password: password)
                 await session.refreshProfile()
                 ToastCentre.shared.show("登录成功")
+                if addAccountMode { onSignedIn?() }
             } catch {
                 message = "登录失败：\(error.localizedDescription)"
                 isError = true
@@ -171,6 +216,7 @@ struct LoginView: View {
                 session.signIn(token: token, username: user, password: password)
                 await session.refreshProfile()
                 ToastCentre.shared.show(mode ? "注册成功，欢迎加入！" : "登录成功")
+                if addAccountMode { onSignedIn?() }
             } catch {
                 message = error.localizedDescription
                 isError = true
