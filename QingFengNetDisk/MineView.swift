@@ -56,14 +56,17 @@ struct MineView: View {
             Text("退出后需要重新输入账号密码")
         }
         .confirmationDialog("删除已保存的账号",
-                            item: $deletingAccount) { account in
+                            isPresented: .init(get: { deletingAccount != nil },
+                                               set: { if !$0 { deletingAccount = nil } }),
+                            titleVisibility: .visible,
+                            presenting: deletingAccount) { account in
             Button("删除 \(account)", role: .destructive) {
                 withAnimation { session.deleteSavedAccount(account) }
                 ToastCentre.shared.show("已删除账号 \(account)")
             }
             Button("取消", role: .cancel) {}
-        } message: {
-            Text(deletingAccount == AppSettings.username
+        } message: { account in
+            Text(account == AppSettings.username
                  ? "这是当前登录的账号，删除后将同时退出登录。"
                  : "将同时删除本机保存的密码；下次使用需重新输入。")
         }

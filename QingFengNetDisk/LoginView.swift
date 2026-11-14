@@ -217,13 +217,16 @@ struct SavedAccountsCard: View {
                 }
             }
             .confirmationDialog("删除已保存的账号",
-                                item: $deletingAccount) { account in
+                                isPresented: .init(get: { deletingAccount != nil },
+                                                   set: { if !$0 { deletingAccount = nil } }),
+                                titleVisibility: .visible,
+                                presenting: deletingAccount) { account in
                 Button("删除 \(account)", role: .destructive) {
                     withAnimation { session.deleteSavedAccount(account) }
                     ToastCentre.shared.show("已删除账号 \(account)")
                 }
                 Button("取消", role: .cancel) {}
-            } message: {
+            } message: { account in
                 Text("将同时删除本机保存的密码；下次使用需重新输入。")
             }
         }

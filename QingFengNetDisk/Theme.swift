@@ -70,48 +70,6 @@ extension View {
     func mdFill(_ color: Color, radius: CGFloat = MD3.radiusLarge) -> some View {
         modifier(MDFill(color: color, radius: radius))
     }
-
-    /// 确认弹窗（item 版）：SwiftUI 缺省 API 的补齐，删除账号等场景使用
-    func confirmationDialog<A, M, T: Hashable>(_ title: Text,
-                                               item: Binding<T?>,
-                                               @ViewBuilder actions: @escaping (T) -> A,
-                                               @ViewBuilder message: @escaping (T) -> M) -> some View where A: View, M: View {
-        modifier(ItemDialogModifier(title: title,
-                                    item: item,
-                                    actions: actions,
-                                    message: message))
-    }
-}
-
-private struct ItemDialogModifier<A: View, M: View, T: Hashable>: ViewModifier {
-    let title: Text
-    @Binding var item: T?
-    let actions: (T) -> A
-    let message: (T) -> M
-    @State private var isPresented = false
-
-    func body(content: Content) -> some View {
-        content
-            .confirmationDialog(title,
-                                isPresented: $isPresented,
-                                titleVisibility: .visible) {
-                if let value = item {
-                    actions(value)
-                }
-            } message: {
-                if let value = item {
-                    message(value)
-                }
-            }
-            .onChange(of: item) { value in
-                guard !isPresented else { return }
-                guard value != nil else { return }
-                isPresented = true
-            }
-            .onChange(of: isPresented) { presented in
-                if !presented { item = nil }
-            }
-    }
 }
 
 // MARK: - 按钮
