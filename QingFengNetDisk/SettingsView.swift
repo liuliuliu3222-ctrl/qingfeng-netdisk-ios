@@ -36,6 +36,7 @@ struct SettingsView: View {
     @State private var status = ""
     @State private var statusOK: Bool?
     @State private var testing = false
+    @State private var showLogoutConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -101,15 +102,6 @@ struct SettingsView: View {
                                 showChunkSizePicker = true
                             }
                             Divider().overlay(MD3.outlineVariant)
-                            MDRow(icon: "link",
-                                  title: "我的仓库",
-                                  subtitle: "GitHub: qingfeng-netdisk-ios",
-                                  showsChevron: true) {
-                                if let url = URL(string: "https://github.com/liuliuliu3222-ctrl/qingfeng-netdisk-ios") {
-                                    UIApplication.shared.open(url)
-                                }
-                            }
-                            Divider().overlay(MD3.outlineVariant)
                             MDRow(icon: "doc.on.doc",
                                   title: "当前分享码",
                                   subtitle: sharecode.isEmpty ? "（空）" : sharecode,
@@ -128,8 +120,7 @@ struct SettingsView: View {
                               subtitle: AppSettings.username.isEmpty ? nil : "当前账号：\(AppSettings.username)",
                               showsChevron: false,
                               tint: MD3.error) {
-                            session.logout()
-                            dismiss()
+                            showLogoutConfirm = true
                         }
                     }
 
@@ -154,6 +145,15 @@ struct SettingsView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: toast.message)
+        .confirmationDialog("退出登录", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
+            Button("退出", role: .destructive) {
+                session.logout()
+                dismiss()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("退出后需要重新输入账号密码")
+        }
         .sheet(isPresented: $showChunkSizePicker) {
             NavigationStack {
                 List {

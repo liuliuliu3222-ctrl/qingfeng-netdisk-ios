@@ -9,7 +9,6 @@ struct MineView: View {
     var switchToFiles: () -> Void = {}
 
     @State private var showSettings = false
-    @State private var showMember = false
     @State private var showTrash = false
     @State private var showBrowser = false
     @State private var showLogoutConfirm = false
@@ -38,9 +37,6 @@ struct MineView: View {
         .background(MD3.background.ignoresSafeArea())
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(session)
-        }
-        .sheet(isPresented: $showMember) {
-            MemberSheet().environmentObject(session)
         }
         .sheet(isPresented: $showTrash) {
             TrashView()
@@ -91,18 +87,6 @@ struct MineView: View {
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundStyle(MD3.onPrimaryContainer)
                         }
-                        // 编辑图标
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Spacer()
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(.white)
-                                    .background(Circle().fill(Color.black.opacity(0.5)))
-                            }
-                        }
-                        .frame(width: 60, height: 60)
                     }
                 }
                 .buttonStyle(.plain)
@@ -199,8 +183,6 @@ struct MineView: View {
                 MDRow(icon: "trash", title: "回收站") { showTrash = true }
                 Divider().overlay(MD3.outlineVariant)
                 MDRow(icon: "globe", title: "网页浏览") { showBrowser = true }
-                Divider().overlay(MD3.outlineVariant)
-                MDRow(icon: "crown", title: "会员中心", subtitle: "查看等级与配额") { showMember = true }
                 Divider().overlay(MD3.outlineVariant)
                 MDRow(icon: "gearshape", title: "设置", subtitle: AppSettings.server) { showSettings = true }
             }

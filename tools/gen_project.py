@@ -147,12 +147,12 @@ def main() -> int:
 
     target_settings = f"""\t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
-\t\t\t\tCURRENT_PROJECT_VERSION = 31;
+\t\t\t\tCURRENT_PROJECT_VERSION = 32;
 \t\t\t\tENABLE_PREVIEWS = YES;
 \t\t\t\tGENERATE_INFOPLIST_FILE = NO;
 \t\t\t\tINFOPLIST_FILE = {TARGET}/Info.plist;
 \t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 26.0;
-\t\t\t\tMARKETING_VERSION = 3.4.6;
+\t\t\t\tMARKETING_VERSION = 3.4.7;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = {BUNDLE_ID};
 \t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
 \t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
