@@ -341,6 +341,36 @@ final class ToastCentre: ObservableObject {
     }
 }
 
+/// 与应用品牌一致的提示条，替代原先的系统黑色 Toast。
+/// 背景用 MD3.primary 品牌绿、文字与图标用 MD3.onPrimary，深浅色自动适配；
+/// 圆角、柔光阴影与全局 MD3 组件（主按钮、Chip）保持同一套规范。
+struct MDToast: View {
+    let message: String
+    var icon: String = "info.circle.fill"
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+            Text(message)
+                .font(.system(size: 14, weight: .semibold))
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(MD3.onPrimary)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 13)
+        .background(
+            RoundedRectangle(cornerRadius: MD3.radiusLarge, style: .continuous)
+                .fill(MD3.primary)
+        )
+        .shadow(color: MD3.primary.opacity(0.30), radius: 14, x: 0, y: 6)
+        .padding(.horizontal, 28)
+    }
+}
+
 struct ToastOverlay: View {
     @ObservedObject var centre = ToastCentre.shared
 
@@ -348,15 +378,7 @@ struct ToastOverlay: View {
         VStack {
             Spacer()
             if let message = centre.message {
-                Text(message)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .background(Color.black.opacity(0.82))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(.horizontal, 32)
+                MDToast(message: message)
                     .padding(.bottom, 96)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }

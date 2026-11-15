@@ -71,11 +71,23 @@ final class ApiClient {
 
     @discardableResult
     private func send(_ request: URLRequest) async throws -> Data {
-        var data = Data()
-        var response: URLResponse?
+        // SwiftUI `.refreshable` 的 Task 会在下拉手势结束 / 视图重绘时被系统取消。
+        // 若让请求继承这个 Task，URLSession 会抛 URLError.cancelled（中文系统显示
+        // 「已取消」），上层就会把列表清空并弹出错误提示 —— 刷新等于白刷。
+        // 这里用不继承取消状态的 detached Task 承载请求：即使调用方 Task 被取消，
+        // 请求仍会真正发出并拿到服务端最新数据（上传新文件后刷新一定有效）。
+        let task = Task.detached(priority: .userInitiated) { [session] in
+            try await session.data(for: request)
+        }
+        let data: Data
+        let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await task.value
         } catch {
+            let ns = error as NSError
+            if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled {
+                throw APIError(message: "请求已取消")
+            }
             throw APIError(message: error.localizedDescription)
         }
         guard let http = response as? HTTPURLResponse else {

@@ -91,8 +91,7 @@ struct TrashView: View {
         do {
             items = try await ApiClient.shared.trashList()
         } catch {
-            items = []
-            ToastCentre.shared.show(error.localizedDescription)
+            // 刷新失败或被取消：保留现有列表，不清空、不弹提示
         }
         loading = false
     }

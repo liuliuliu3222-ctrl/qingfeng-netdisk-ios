@@ -235,9 +235,10 @@ struct HomeView: View {
         loadingRecents = true
         await session.refreshProfile()
         do {
+            // 每次都重新向服务端取，保证上传新文件后刷新能拿到最新记录
             recents = try await ApiClient.shared.recent()
         } catch {
-            recents = []
+            // 刷新失败或被取消：保留已有列表，不清空、也不弹任何提示
         }
         loadingRecents = false
     }

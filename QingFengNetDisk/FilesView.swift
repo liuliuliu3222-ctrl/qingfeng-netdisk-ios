@@ -304,8 +304,8 @@ struct FilesView: View {
 
     private func load(parentId: Int?) async {
         loading = true
-        searchMode = false
         do {
+            // 每次都向服务端重新取列表，上传新文件后下拉刷新一定拿到最新数据
             let list = try await ApiClient.shared.list(parentId: parentId)
             // 文件夹排在前面，然后按名称排序
             items = list.sorted { a, b in
@@ -315,15 +315,16 @@ struct FilesView: View {
                 return a.name.localizedCompare(b.name) == .orderedAscending
             }
         } catch {
-            items = []
-            ToastCentre.shared.show(error.localizedDescription)
+            // 读取失败（含系统取消）：保留现有列表，绝不清空，也不弹任何提示
         }
         loading = false
     }
 
     private func reload() async {
-        if searchMode {
-            await runSearch(searchText.trimmingCharacters(in: .whitespacesAndNewlines))
+        // 下拉刷新 / 顶部刷新按钮：始终重新请求，并保持当前搜索状态
+        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if searchMode && !keyword.isEmpty {
+            await runSearch(keyword)
         } else {
             await load(parentId: currentParentId)
         }
@@ -331,16 +332,17 @@ struct FilesView: View {
 
     private func runSearch(_ keyword: String) async {
         guard !keyword.isEmpty else {
+            searchMode = false
             await load(parentId: currentParentId)
             return
         }
         loading = true
         searchMode = true
         do {
+            // 重新向服务端搜索，保证刷新能拿到最新结果
             items = try await ApiClient.shared.search(keyword)
         } catch {
-            items = []
-            ToastCentre.shared.show(error.localizedDescription)
+            // 失败或被取消时保留现有结果，不清空、不弹提示
         }
         loading = false
     }

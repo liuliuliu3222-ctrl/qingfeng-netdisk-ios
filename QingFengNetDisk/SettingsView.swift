@@ -1,10 +1,33 @@
 import UIKit
 import SwiftUI
 
+/// 设置页内的轻量提示。
+/// 全局 ToastOverlay 挂在 RootView 上，而本页是 sheet（UIKit 呈现层级更高），
+/// 会把全局 Toast 完全盖住 —— 提示因此要等 sheet 关掉才在「我的」页、
+/// 甚至退出后的登录页冒出来。这里改用页面内的提示层，保证清空缓存等操作
+/// 就在当前设置页即时给出反馈。
+private final class SettingsToast: ObservableObject {
+    @Published private(set) var message: String?
+    private var stamp = 0
+
+    func show(_ text: String) {
+        DispatchQueue.main.async {
+            self.message = text
+            self.stamp += 1
+            let current = self.stamp
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                if self.stamp == current { self.message = nil }
+            }
+        }
+    }
+}
+
 struct SettingsView: View {
 
     @EnvironmentObject private var session: SessionStore
     @Environment(\.dismiss) private var dismiss
+
+    @StateObject private var toast = SettingsToast()
 
     @State private var server = AppSettings.server
     @State private var sharecode = AppSettings.sharecode
@@ -61,7 +84,7 @@ struct SettingsView: View {
                                   subtitle: "释放本机缓存占用",
                                   showsChevron: false) {
                                 ThumbnailStore.shared.clearDisk()
-                                ToastCentre.shared.show("缩略图缓存已清空")
+                                toast.show("缩略图缓存已清空")
                             }
                             Divider().overlay(MD3.outlineVariant)
                             MDRow(icon: "arrow.clockwise.circle",
@@ -92,7 +115,7 @@ struct SettingsView: View {
                                   subtitle: sharecode.isEmpty ? "（空）" : sharecode,
                                   showsChevron: false) {
                                 UIPasteboard.general.string = sharecode
-                                ToastCentre.shared.show("已复制分享码")
+                                toast.show("已复制分享码")
                             }
                         }
                     }
@@ -120,6 +143,17 @@ struct SettingsView: View {
             }
         }
         .background(MD3.background.ignoresSafeArea())
+        // 页面内提示层：跟随本页生命周期，不会被 sheet 层级遮住。
+        // 复用全局 MDToast，与其他页面样式完全一致（品牌绿，不再是黑底）。
+        .overlay(alignment: .bottom) {
+            if let message = toast.message {
+                MDToast(message: message)
+                    .padding(.bottom, 48)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: toast.message)
         .sheet(isPresented: $showChunkSizePicker) {
             NavigationStack {
                 List {
@@ -128,7 +162,7 @@ struct SettingsView: View {
                             chunkSizeMB = mb
                             AppSettings.chunkSizeMB = mb
                             showChunkSizePicker = false
-                            ToastCentre.shared.show("分片大小：\(mb) MB")
+                            toast.show("分片大小：\(mb) MB")
                         } label: {
                             HStack {
                                 Text("\(mb) MB")
@@ -162,7 +196,7 @@ struct SettingsView: View {
                 try? FileManager.default.removeItem(at: file)
             }
         }
-        ToastCentre.shared.show("全部缓存已清除")
+        toast.show("全部缓存已清除")
     }
 
     private func save() {

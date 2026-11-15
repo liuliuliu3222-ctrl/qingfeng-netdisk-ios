@@ -40,6 +40,10 @@ struct TransferView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 40)
             }
+            // 传输任务都是本机数据，下拉只重绘，不请求网络、不弹任何提示
+            .refreshable {
+                await MainActor.run { store.objectWillChange.send() }
+            }
         }
         .background(MD3.background.ignoresSafeArea())
     }
