@@ -37,6 +37,17 @@ struct SettingsView: View {
     @State private var statusOK: Bool?
     @State private var testing = false
     @State private var showLogoutConfirm = false
+    @State private var showBrowser = false
+
+    /// 网页浏览入口要打开的网址，与 BrowserView 保持一致（服务器地址 + 分享码）。
+    private var browserURLText: String {
+        var path = "/"
+        let code = AppSettings.sharecode
+        if !code.isEmpty {
+            path += "?sharecode=" + ApiClient.encode(code)
+        }
+        return AppSettings.server + path
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,7 +109,7 @@ struct SettingsView: View {
                             MDRow(icon: "square.split.2x2",
                                   title: "上传分片大小",
                                   subtitle: "当前：\(chunkSizeMB) MB",
-                                  showsChevron: true) {
+                                  showsChevron: false) {
                                 showChunkSizePicker = true
                             }
                             Divider().overlay(MD3.outlineVariant)
@@ -108,6 +119,13 @@ struct SettingsView: View {
                                   showsChevron: false) {
                                 UIPasteboard.general.string = sharecode
                                 toast.show("已复制分享码")
+                            }
+                            Divider().overlay(MD3.outlineVariant)
+                            MDRow(icon: "globe",
+                                  title: "网页浏览",
+                                  subtitle: browserURLText,
+                                  showsChevron: true) {
+                                showBrowser = true
                             }
                         }
                     }
@@ -153,6 +171,9 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("退出后需要重新输入账号密码")
+        }
+        .sheet(isPresented: $showBrowser) {
+            BrowserView()
         }
         .sheet(isPresented: $showChunkSizePicker) {
             NavigationStack {

@@ -173,12 +173,6 @@ struct FilesView: View {
         } message: {
             Text("将生成分享链接并复制到剪贴板")
         }
-        .confirmationDialog("删除确认", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("移入回收站", role: .destructive) { performDelete() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("确定把「\(deleteTarget?.name ?? "")」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。")
-        }
         .onDisappear { searchTask?.cancel() }
     }
 
@@ -268,6 +262,38 @@ struct FilesView: View {
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
+                    }
+                    // 删除确认弹窗锚定在被点击的文件行上，而不是固定从页面底部弹出。
+                    // 用 popover + 紧凑宽度适配，iPhone 上也以气泡形式贴着该文件行弹出；
+                    // 标题、说明、按钮与执行逻辑与原来的 confirmationDialog 完全一致。
+                    // 只有被点击的那一行绑定为 true，避免所有行同时弹出。
+                    .popover(
+                        isPresented: Binding(
+                            get: { showDeleteConfirm && deleteTarget?.id == file.id },
+                            set: { newValue in
+                                if !newValue {
+                                    showDeleteConfirm = false
+                                    deleteTarget = nil
+                                }
+                            }
+                        ),
+                        attachmentAnchor: .rect(.bounds),
+                        arrowEdge: .bottom
+                    ) {
+                        DeleteConfirmPopover(
+                            file: file,
+                            onDelete: {
+                                showDeleteConfirm = false
+                                deleteTarget = nil
+                                performDelete(file)
+                            },
+                            onCancel: {
+                                showDeleteConfirm = false
+                                deleteTarget = nil
+                            }
+                        )
+                        // 强制在 iPhone（紧凑宽度）也用气泡，而不是变成底部动作面板
+                        .presentationCompactAdaptation(.popover)
                     }
 
                     if index < items.count - 1 {
@@ -378,8 +404,7 @@ struct FilesView: View {
         }
     }
 
-    private func performDelete() {
-        guard let target = deleteTarget else { return }
+    private func performDelete(_ target: QFFile) {
         Task {
             do {
                 try await ApiClient.shared.delete(id: target.id)
@@ -454,5 +479,55 @@ struct FilesView: View {
             await load(parentId: parent)
             await session.refreshProfile()
         }
+    }
+}
+
+/// 删除确认气泡：样式、按钮、文案与原先的 confirmationDialog 一致，
+/// 仅改为锚定在被点击文件行上的 popover 呈现。
+private struct DeleteConfirmPopover: View {
+    let file: QFFile
+    let onDelete: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 6) {
+                Text("删除确认")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(MD3.onSurface)
+                    .frame(maxWidth: .infinity)
+                Text("确定把「\(file.name)」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。")
+                    .font(.system(size: 12))
+                    .foregroundStyle(MD3.onSurfaceVariant)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+
+            Divider().overlay(MD3.outlineVariant)
+            Button(role: .destructive, action: onDelete) {
+                Text("移入回收站")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(MD3.error)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 11)
+
+            Divider().overlay(MD3.outlineVariant)
+            Button(action: onCancel) {
+                Text("取消")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(MD3.onSurface)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 11)
+        }
+        .frame(width: 260)
+        .background(MD3.surface)
+        .clipShape(RoundedRectangle(cornerRadius: MD3.radiusLarge, style: .continuous))
     }
 }

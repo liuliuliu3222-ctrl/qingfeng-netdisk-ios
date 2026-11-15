@@ -10,7 +10,6 @@ struct MineView: View {
 
     @State private var showSettings = false
     @State private var showTrash = false
-    @State private var showBrowser = false
     @State private var showLogoutConfirm = false
     @State private var showAccountSwitch = false
     @State private var avatarImage: UIImage?
@@ -40,9 +39,6 @@ struct MineView: View {
         }
         .sheet(isPresented: $showTrash) {
             TrashView()
-        }
-        .sheet(isPresented: $showBrowser) {
-            BrowserView()
         }
         .confirmationDialog("退出登录", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
             Button("退出", role: .destructive) { session.logout() }
@@ -181,8 +177,6 @@ struct MineView: View {
                 MDRow(icon: "folder", title: "全部文件") { switchToFiles() }
                 Divider().overlay(MD3.outlineVariant)
                 MDRow(icon: "trash", title: "回收站") { showTrash = true }
-                Divider().overlay(MD3.outlineVariant)
-                MDRow(icon: "globe", title: "网页浏览") { showBrowser = true }
                 Divider().overlay(MD3.outlineVariant)
                 MDRow(icon: "gearshape", title: "设置", subtitle: AppSettings.server) { showSettings = true }
             }
