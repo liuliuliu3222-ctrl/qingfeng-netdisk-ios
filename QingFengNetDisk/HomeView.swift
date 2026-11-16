@@ -13,7 +13,6 @@ struct HomeView: View {
     var switchToFiles: () -> Void
 
     @State private var recents: [QFFile] = []
-    @State private var loadingRecents = false
     @State private var categoryTarget: CategoryTarget?
     @State private var previewTarget: QFFile?
     @State private var showTrash = false
@@ -32,7 +31,7 @@ struct HomeView: View {
         VStack(spacing: 0) {
             MDTopAppBar(
                 title: "清风网盘",
-                subtitle: session.me.tierName,
+                subtitle: "欢迎使用",
                 trailing: AnyView(
                     HStack(spacing: 0) {
                         MDIconButton(icon: "magnifyingglass") { switchToFiles() }
@@ -193,9 +192,6 @@ struct HomeView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MD3.onSurface)
                 Spacer()
-                if loadingRecents {
-                    ProgressView().scaleEffect(0.7)
-                }
             }
             .padding(.horizontal, 4)
 
@@ -205,7 +201,7 @@ struct HomeView: View {
                         Image(systemName: "clock")
                             .font(.system(size: 26, weight: .light))
                             .foregroundStyle(MD3.onSurfaceVariant.opacity(0.6))
-                        Text(loadingRecents ? "正在加载…" : "暂无最近记录")
+                        Text("暂无最近记录")
                             .font(.system(size: 13))
                             .foregroundStyle(MD3.onSurfaceVariant)
                     }
@@ -232,14 +228,16 @@ struct HomeView: View {
     }
 
     private func refresh() async {
-        loadingRecents = true
+        // 静默刷新：全程不改动任何加载态 UI（无 ProgressView、无空态文案切换），
+        // 最近使用列表的位置与结构保持固定，不产生上下位移抖动。
         await session.refreshProfile()
         do {
             // 每次都重新向服务端取，保证上传新文件后刷新能拿到最新记录
-            recents = try await ApiClient.shared.recent()
+            let list = try await ApiClient.shared.recent()
+            // 数据无变化时不重新赋值，避免任何隐式重绘带来的位移抖动
+            if recents != list { recents = list }
         } catch {
             // 刷新失败或被取消：保留已有列表，不清空、也不弹任何提示
         }
-        loadingRecents = false
     }
 }

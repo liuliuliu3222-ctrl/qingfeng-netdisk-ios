@@ -1,11 +1,33 @@
 import SwiftUI
 
+/// 回收站页面内的轻量提示。
+/// TrashView 以 sheet 呈现，UIKit 呈现层级高于挂在 RootView 上的全局 ToastOverlay，
+/// 会把全局 Toast 盖住 —— 提示因此要等 sheet 关掉才在上级主页冒出来。
+/// 这里改用页面内的提示层，保证还原/删除/清空的反馈就停留在当前回收站页面底部，
+/// 样式与全局 MDToast 完全一致（品牌绿），不再抛到上级主页。
+private final class TrashToast: ObservableObject {
+    @Published private(set) var message: String?
+    private var stamp = 0
+
+    func show(_ text: String) {
+        DispatchQueue.main.async {
+            self.message = text
+            self.stamp += 1
+            let current = self.stamp
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                if self.stamp == current { self.message = nil }
+            }
+        }
+    }
+}
+
 struct TrashView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    @StateObject private var toast = TrashToast()
+
     @State private var items: [QFFile] = []
-    @State private var loading = false
 
     @State private var purgeTarget: QFFile?
     @State private var showPurgeConfirm = false
@@ -32,7 +54,9 @@ struct TrashView: View {
 
             ScrollView {
                 VStack(spacing: 12) {
-                    if items.isEmpty && !loading {
+                    // 空状态只取决于 items 是否为空，不再受加载态影响。
+                    // 刷新时后台静默更新数据，页面结构保持稳定，不重绘、不闪屏。
+                    if items.isEmpty {
                         MDEmptyState(icon: "trash",
                                      title: "回收站是空的",
                                      detail: "删除的文件会先进入这里")
@@ -71,6 +95,16 @@ struct TrashView: View {
             .refreshable { await load() }
         }
         .background(MD3.background.ignoresSafeArea())
+        // 页面内提示层：固定在本页底部，不会被 sheet 层级遮住，也不会抛到上级主页。
+        .overlay(alignment: .bottom) {
+            if let message = toast.message {
+                MDToast(message: message)
+                    .padding(.bottom, 48)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: toast.message)
         .task { await load() }
         .confirmationDialog("彻底删除", isPresented: $showPurgeConfirm, titleVisibility: .visible) {
             Button("删除", role: .destructive) { performPurge() }
@@ -87,23 +121,24 @@ struct TrashView: View {
     }
 
     private func load() async {
-        loading = true
+        // 后台静默更新：不切换任何加载态，页面结构不重绘、不闪屏。
         do {
-            items = try await ApiClient.shared.trashList()
+            let list = try await ApiClient.shared.trashList()
+            // 数据无变化时不重新赋值，避免任何隐式重绘导致的闪屏
+            if items != list { items = list }
         } catch {
             // 刷新失败或被取消：保留现有列表，不清空、不弹提示
         }
-        loading = false
     }
 
     private func restore(_ file: QFFile) {
         Task {
             do {
                 try await ApiClient.shared.trashRestore(ids: [file.id])
-                ToastCentre.shared.show("已还原")
+                toast.show("已还原")
                 await load()
             } catch {
-                ToastCentre.shared.show(error.localizedDescription)
+                toast.show(error.localizedDescription)
             }
         }
     }
@@ -113,26 +148,26 @@ struct TrashView: View {
         Task {
             do {
                 try await ApiClient.shared.trashPurge(ids: [target.id])
-                ToastCentre.shared.show("已彻底删除")
+                toast.show("已彻底删除")
                 await load()
             } catch {
-                ToastCentre.shared.show(error.localizedDescription)
+                toast.show(error.localizedDescription)
             }
         }
     }
 
     private func emptyTrash() {
         guard !items.isEmpty else {
-            ToastCentre.shared.show("回收站已经是空的")
+            toast.show("回收站已经是空的")
             return
         }
         Task {
             do {
                 try await ApiClient.shared.trashEmpty()
-                ToastCentre.shared.show("回收站已清空")
+                toast.show("回收站已清空")
                 await load()
             } catch {
-                ToastCentre.shared.show(error.localizedDescription)
+                toast.show(error.localizedDescription)
             }
         }
     }
