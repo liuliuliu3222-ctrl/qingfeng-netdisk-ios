@@ -40,7 +40,8 @@ struct MineView: View {
         .sheet(isPresented: $showTrash) {
             TrashView()
         }
-        .confirmationDialog("退出登录", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
+        // 退出登录确认：系统原生居中弹窗（与设置页退出登录一致）
+        .alert("退出登录", isPresented: $showLogoutConfirm) {
             Button("退出", role: .destructive) { session.logout() }
             Button("取消", role: .cancel) {}
         } message: {

@@ -32,10 +32,8 @@ struct LoginView: View {
                 VStack(spacing: 20) {
                     header
 
-                    // 添加账号模式：只保留账号登录，隐藏「已保存的账号」卡片
-                    if AppSettings.hasSavedAccounts && !addAccountMode {
-                        SavedAccountsCard(session: session)
-                    }
+                    // 登录页只显示账号登录，不再展示「已保存的账号」列表
+                    // （无论普通登录还是退出后重新登录，都只保留账号/密码登录表单）
 
                     MDCard(radius: MD3.radiusExtraLarge, padding: 20) {
                         VStack(spacing: 16) {

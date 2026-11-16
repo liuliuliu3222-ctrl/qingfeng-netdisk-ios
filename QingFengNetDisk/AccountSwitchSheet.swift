@@ -73,11 +73,11 @@ struct AccountSwitchSheet: View {
                       })
                 .environmentObject(session)
         }
-        .confirmationDialog("删除账号",
-                            isPresented: .init(get: { deletingAccount != nil },
-                                               set: { if !$0 { deletingAccount = nil } }),
-                            titleVisibility: .visible,
-                            presenting: deletingAccount) { account in
+        // 删除账号确认：系统原生居中弹窗（与设置页退出登录一致），文案/按钮/执行逻辑不变
+        .alert("删除账号",
+               isPresented: .init(get: { deletingAccount != nil },
+                                  set: { if !$0 { deletingAccount = nil } }),
+               presenting: deletingAccount) { account in
             Button("删除 \(account)", role: .destructive) {
                 withAnimation { session.deleteSavedAccount(account) }
                 ToastCentre.shared.show("已删除账号 \(account)")
@@ -171,7 +171,11 @@ struct AccountSwitchSheet: View {
         // 高优先级长按：长按成功时压制 tap，只弹删除确认，避免切换账号/关闭页面抢先触发。
         .highPriorityGesture(
             LongPressGesture(minimumDuration: 0.5)
-                .onEnded { _ in deletingAccount = account }
+                .onEnded { _ in
+                    // 长按命中给出触感反馈，再弹出删除确认
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    deletingAccount = account
+                }
         )
     }
 

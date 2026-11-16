@@ -2,13 +2,13 @@
 
 原生 SwiftUI 重写的清风网盘 iOS 客户端，Material Design 3 风格 UI。
 
-![Version](https://img.shields.io/badge/version-3.5.3-blue)
+![Version](https://img.shields.io/badge/version-3.5.4-blue)
 ![Platform](https://img.shields.io/badge/platform-iOS%2026%2B-green)
 ![Language](https://img.shields.io/badge/language-SwiftUI-orange)
 
 ## 📥 下载安装
 
-**最新版本：v3.5.3**
+**最新版本：v3.5.4**
 
 - **本地构建**：本仓库 Actions 会自动构建 IPA（见下方「自动构建」）
 - **安装方法**：
