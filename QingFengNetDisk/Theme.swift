@@ -445,8 +445,10 @@ struct MDRow: View {
 
 // MARK: - 刷新图标（点击顺时针快速转一圈后停止）
 
-/// 右上角刷新图标：点击后顺时针快速旋转恰好一圈并停回原位，
+/// 右上角刷新图标：点击后顺时针快速旋转恰好 360° 并停在原位（视觉等于没转），
 /// 同时触发外部传入的原有刷新逻辑（不改动该逻辑本身）。
+/// 角度只增不减：每次点击在上一圈基础上 +360°，永不归零，
+/// 因此不会出现「转一圈后又反向转回来」的二次动画。
 struct SpinningRefreshIcon: View {
     let tint: Color
     let size: CGFloat
@@ -471,8 +473,8 @@ struct SpinningRefreshIcon: View {
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(tint)
             .rotationEffect(.degrees(turns * 360))
-            // 只转一圈：每次点击 turns 恰好 +1，用固定时长动画到整圈角度后停止
-            .animation(.easeInOut(duration: 0.55), value: turns)
+            // 匀速快速转完这一圈（约 0.5s），到整圈角度后自然停止
+            .animation(.linear(duration: 0.5), value: turns)
             .frame(width: hitSize, height: hitSize)
             .contentShape(Rectangle())
             .onTapGesture { start() }
@@ -483,113 +485,11 @@ struct SpinningRefreshIcon: View {
         spinning = true
         // 触发原有刷新逻辑（保持不变）
         action()
-        // 顺时针转满一圈
+        // 角度单调递增一整圈，永远向前转、停在原位，不做归零（避免反向回转）
         turns += 1
         Task {
-            try? await Task.sleep(nanoseconds: 560_000_000)
-            guard turns >= 1 else { return }
-            // 归一化回整圈基准角度，避免多次点击后角度累积导致动画越转越久
-            withAnimation(nil) { turns = 0 }
+            try? await Task.sleep(nanoseconds: 520_000_000)
             spinning = false
         }
-    }
-}
-
-// MARK: - 统一玻璃确认弹窗（退出登录 / 删除确认 / 上传选项共用）
-
-/// 玻璃弹窗按钮行：视觉与系统 confirmationDialog 按钮一致——通栏、分隔线，
-/// 破坏性按钮红色、取消按钮加粗。
-struct GlassDialogButton: View {
-    let title: String
-    var role: ButtonRole? = nil
-    var bold = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(role: role, action: action) {
-            Text(title)
-                .font(.system(size: 16, weight: bold ? .semibold : .regular))
-                .foregroundStyle(role == .destructive ? Color.red : Color.accentColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// 可选宽度修饰：nil 时不限制（用于自适应宽度场景）。
-private struct OptionalWidthModifier: ViewModifier {
-    let width: CGFloat?
-    func body(content: Content) -> some View {
-        if let width { content.frame(width: width) }
-        else { content }
-    }
-}
-
-/// 玻璃弹窗卡片：标题（可选说明）+ 一组按钮，毛玻璃背景、圆角与描边，
-/// 与系统确认弹窗玻璃质感一致，但可自定义呈现位置与动画。
-struct GlassDialogCard<Content: View>: View {
-    let title: String
-    var message: String? = nil
-    var width: CGFloat? = 280
-    @ViewBuilder var actions: Content
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-                .padding(.bottom, 12)
-
-            if let message, !message.isEmpty {
-                Text(message)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 14)
-            }
-
-            Divider()
-            actions
-        }
-        .modifier(OptionalWidthModifier(width: width))
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.18), radius: 18, x: 0, y: 8)
-    }
-}
-
-/// 屏幕居中的玻璃弹窗容器：半透明遮罩 + 居中卡片。
-/// 淡入 / 淡出使用同一条 easeInOut 动画，时长完全一致（0.22s）。
-struct GlassDialogOverlay<Content: View>: View {
-    @Binding var isPresented: Bool
-    @ViewBuilder var content: Content
-
-    private let duration = 0.22
-
-    var body: some View {
-        ZStack {
-            if isPresented {
-                Color.black.opacity(0.32)
-                    .ignoresSafeArea()
-                    .onTapGesture { withAnimation { isPresented = false } }
-                    .transition(.opacity)
-
-                content
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            }
-        }
-        .animation(.easeInOut(duration: duration), value: isPresented)
-        .allowsHitTesting(isPresented)
     }
 }

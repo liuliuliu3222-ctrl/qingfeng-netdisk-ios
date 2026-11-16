@@ -124,7 +124,7 @@ struct SettingsView: View {
                             MDRow(icon: "globe",
                                   title: "网页浏览",
                                   subtitle: browserURLText,
-                                  showsChevron: true) {
+                                  showsChevron: false) {
                                 showBrowser = true
                             }
                         }
@@ -163,25 +163,15 @@ struct SettingsView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: toast.message)
-        // 退出登录确认：居中玻璃弹窗（与删除确认 / 上传选项统一样式），淡入淡出时长一致
-        .overlay {
-            GlassDialogOverlay(isPresented: $showLogoutConfirm) {
-                GlassDialogCard(title: "退出登录", message: "退出后需要重新输入账号密码") {
-                    Divider()
-                    GlassDialogButton(title: "退出", role: .destructive) {
-                        // 先收起弹窗（播放淡出），再执行退出
-                        withAnimation { showLogoutConfirm = false }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-                            session.logout()
-                            dismiss()
-                        }
-                    }
-                    Divider()
-                    GlassDialogButton(title: "取消", bold: true) {
-                        withAnimation { showLogoutConfirm = false }
-                    }
-                }
+        // 退出登录确认：系统原生 confirmationDialog
+        .confirmationDialog("退出登录", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
+            Button("退出", role: .destructive) {
+                session.logout()
+                dismiss()
             }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("退出后需要重新输入账号密码")
         }
         .sheet(isPresented: $showBrowser) {
             BrowserView()

@@ -126,26 +126,13 @@ struct FilesView: View {
                 .padding(.bottom, 100)
         }
         .task { await load(parentId: currentParentId) }
-        // 上传选项：屏幕居中玻璃弹窗（与退出登录统一样式），去掉贴按钮气泡
-        .overlay {
-            GlassDialogOverlay(isPresented: $showSourceDialog) {
-                GlassDialogCard(title: "上传文件",
-                                message: "上传到：\(stack.last?.name ?? "全部文件")") {
-                    GlassDialogButton(title: "从「文件」选择") {
-                        withAnimation { showSourceDialog = false }
-                        showFilePicker = true
-                    }
-                    Divider()
-                    GlassDialogButton(title: "从「照片」选择") {
-                        withAnimation { showSourceDialog = false }
-                        showPhotoPicker = true
-                    }
-                    Divider()
-                    GlassDialogButton(title: "取消", bold: true) {
-                        withAnimation { showSourceDialog = false }
-                    }
-                }
-            }
+        // 上传选项：系统原生 confirmationDialog
+        .confirmationDialog("上传文件", isPresented: $showSourceDialog, titleVisibility: .visible) {
+            Button("从「文件」选择") { showFilePicker = true }
+            Button("从「照片」选择") { showPhotoPicker = true }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("上传到：\(stack.last?.name ?? "全部文件")")
         }
         .sheet(isPresented: $showFilePicker) {
             DocumentPicker(allowsMultiple: true) { urls in
@@ -187,23 +174,12 @@ struct FilesView: View {
         } message: {
             Text("将生成分享链接并复制到剪贴板")
         }
-        // 删除确认弹窗：屏幕居中玻璃弹窗（与退出登录完全一致），文案/按钮/执行逻辑不变
-        .overlay {
-            GlassDialogOverlay(isPresented: $showDeleteConfirm) {
-                GlassDialogCard(
-                    title: "删除确认",
-                    message: "确定把「\(deleteTarget?.name ?? "")」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。"
-                ) {
-                    GlassDialogButton(title: "移入回收站", role: .destructive) {
-                        withAnimation { showDeleteConfirm = false }
-                        performDelete()
-                    }
-                    Divider()
-                    GlassDialogButton(title: "取消", bold: true) {
-                        withAnimation { showDeleteConfirm = false }
-                    }
-                }
-            }
+        // 删除确认弹窗：系统原生 confirmationDialog，文案/按钮/执行逻辑不变
+        .confirmationDialog("删除确认", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("移入回收站", role: .destructive) { performDelete() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("确定把「\(deleteTarget?.name ?? "")」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。")
         }
         .onDisappear { searchTask?.cancel() }
     }
