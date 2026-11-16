@@ -68,8 +68,8 @@ struct TransferView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            SpinningRefreshIcon(tint: MD3.primary, size: 16, hitSize: 38) {
-                await MainActor.run { store.objectWillChange.send() }
+            SpinningRefreshIcon(tint: MD3.primary, size: 16, hitSize: 34) {
+                store.objectWillChange.send()
             }
         }
         .padding(.horizontal, 16)

@@ -163,14 +163,14 @@ struct SettingsView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: toast.message)
-        // 自定义玻璃确认弹窗：外观/文字/按钮布局与原系统弹窗一致，
-        // 淡入与淡出使用同一条动画（时长完全相同）。
+        // 退出登录确认：居中玻璃弹窗（与删除确认 / 上传选项统一样式），淡入淡出时长一致
         .overlay {
             GlassDialogOverlay(isPresented: $showLogoutConfirm) {
                 GlassDialogCard(title: "退出登录", message: "退出后需要重新输入账号密码") {
+                    Divider()
                     GlassDialogButton(title: "退出", role: .destructive) {
+                        // 先收起弹窗（播放淡出），再执行退出
                         withAnimation { showLogoutConfirm = false }
-                        // 等淡出动画播完再退出，保证关闭动画可见
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
                             session.logout()
                             dismiss()
@@ -178,7 +178,7 @@ struct SettingsView: View {
                     }
                     Divider()
                     GlassDialogButton(title: "取消", bold: true) {
-                        showLogoutConfirm = false
+                        withAnimation { showLogoutConfirm = false }
                     }
                 }
             }

@@ -443,23 +443,23 @@ struct MDRow: View {
     }
 }
 
-// MARK: - 刷新图标（点击顺时针旋转，时长与刷新任务匹配）
+// MARK: - 刷新图标（点击顺时针快速转一圈后停止）
 
-/// 右上角刷新图标：点击后顺时针持续旋转，异步刷新任务完成时回到整圈角度并停止。
-/// 不改动外部刷新逻辑，只负责图标的视觉反馈。
+/// 右上角刷新图标：点击后顺时针快速旋转恰好一圈并停回原位，
+/// 同时触发外部传入的原有刷新逻辑（不改动该逻辑本身）。
 struct SpinningRefreshIcon: View {
     let tint: Color
     let size: CGFloat
     let hitSize: CGFloat
-    let action: () async -> Void
+    let action: () -> Void
 
-    @State private var spinning = false
     @State private var turns: Double = 0
+    @State private var spinning = false
 
     init(tint: Color = MD3.onSurfaceVariant,
          size: CGFloat = 20,
          hitSize: CGFloat = 42,
-         action: @escaping () async -> Void) {
+         action: @escaping () -> Void) {
         self.tint = tint
         self.size = size
         self.hitSize = hitSize
@@ -471,10 +471,8 @@ struct SpinningRefreshIcon: View {
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(tint)
             .rotationEffect(.degrees(turns * 360))
-            .animation(spinning
-                       ? .linear(duration: 0.8).repeatForever(autoreverses: false)
-                       : .default,
-                       value: turns)
+            // 只转一圈：每次点击 turns 恰好 +1，用固定时长动画到整圈角度后停止
+            .animation(.easeInOut(duration: 0.55), value: turns)
             .frame(width: hitSize, height: hitSize)
             .contentShape(Rectangle())
             .onTapGesture { start() }
@@ -483,17 +481,16 @@ struct SpinningRefreshIcon: View {
     private func start() {
         guard !spinning else { return }
         spinning = true
+        // 触发原有刷新逻辑（保持不变）
+        action()
+        // 顺时针转满一圈
         turns += 1
         Task {
-            // 保证至少转满约一圈（0.8s），让瞬时刷新（如传输页本机重绘）也能看到反馈
-            let started = Date()
-            await action()
-            let elapsed = Date().timeIntervalSince(started)
-            if elapsed < 0.8 {
-                try? await Task.sleep(nanoseconds: UInt64((0.8 - elapsed) * 1_000_000_000))
-            }
+            try? await Task.sleep(nanoseconds: 560_000_000)
+            guard turns >= 1 else { return }
+            // 归一化回整圈基准角度，避免多次点击后角度累积导致动画越转越久
+            withAnimation(nil) { turns = 0 }
             spinning = false
-            turns = turns.rounded(.up)
         }
     }
 }
@@ -521,7 +518,7 @@ struct GlassDialogButton: View {
     }
 }
 
-/// 可选宽度修饰：nil 时不限制（用于 popover 内自适应宽度）。
+/// 可选宽度修饰：nil 时不限制（用于自适应宽度场景）。
 private struct OptionalWidthModifier: ViewModifier {
     let width: CGFloat?
     func body(content: Content) -> some View {

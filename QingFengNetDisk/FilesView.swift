@@ -94,7 +94,9 @@ struct FilesView: View {
                     HStack(spacing: 0) {
                         MDIconButton(icon: "folder.badge.plus") { showNewFolder = true }
                         MDIconButton(icon: "trash") { showTrash = true }
-                        SpinningRefreshIcon { await reload() }
+                        SpinningRefreshIcon {
+                            _ = Task { await reload() }
+                        }
                     }
                 )
             )
@@ -124,22 +126,23 @@ struct FilesView: View {
                 .padding(.bottom, 100)
         }
         .task { await load(parentId: currentParentId) }
-        // 上传选项：屏幕居中的玻璃弹窗，样式与退出登录统一，无气泡箭头
+        // 上传选项：屏幕居中玻璃弹窗（与退出登录统一样式），去掉贴按钮气泡
         .overlay {
             GlassDialogOverlay(isPresented: $showSourceDialog) {
-                GlassDialogCard(title: "上传文件", message: "上传到：\(stack.last?.name ?? "全部文件")") {
+                GlassDialogCard(title: "上传文件",
+                                message: "上传到：\(stack.last?.name ?? "全部文件")") {
                     GlassDialogButton(title: "从「文件」选择") {
                         withAnimation { showSourceDialog = false }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { showFilePicker = true }
+                        showFilePicker = true
                     }
                     Divider()
                     GlassDialogButton(title: "从「照片」选择") {
                         withAnimation { showSourceDialog = false }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { showPhotoPicker = true }
+                        showPhotoPicker = true
                     }
                     Divider()
                     GlassDialogButton(title: "取消", bold: true) {
-                        showSourceDialog = false
+                        withAnimation { showSourceDialog = false }
                     }
                 }
             }
@@ -183,6 +186,24 @@ struct FilesView: View {
             Button("创建") { createShare() }
         } message: {
             Text("将生成分享链接并复制到剪贴板")
+        }
+        // 删除确认弹窗：屏幕居中玻璃弹窗（与退出登录完全一致），文案/按钮/执行逻辑不变
+        .overlay {
+            GlassDialogOverlay(isPresented: $showDeleteConfirm) {
+                GlassDialogCard(
+                    title: "删除确认",
+                    message: "确定把「\(deleteTarget?.name ?? "")」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。"
+                ) {
+                    GlassDialogButton(title: "移入回收站", role: .destructive) {
+                        withAnimation { showDeleteConfirm = false }
+                        performDelete()
+                    }
+                    Divider()
+                    GlassDialogButton(title: "取消", bold: true) {
+                        withAnimation { showDeleteConfirm = false }
+                    }
+                }
+            }
         }
         .onDisappear { searchTask?.cancel() }
     }
@@ -240,6 +261,7 @@ struct FilesView: View {
                             FileRow(file: file, showsChevron: false)
                         }
                         .buttonStyle(.plain)
+                        // 长按：与三点按钮共用同一份菜单内容，保证完全一致
                         .contextMenu { fileMenuContent(for: file) }
 
                         // 右侧三点：点击直接弹出与长按完全一致的操作菜单，对齐本行
@@ -252,39 +274,6 @@ struct FilesView: View {
                                 .frame(width: 44, height: 66)
                                 .contentShape(Rectangle())
                         }
-                    }
-                    // 删除确认：玻璃弹窗（与退出登录一致），锚定在被点击/长按的同一文件行
-                    .popover(
-                        isPresented: Binding(
-                            get: { showDeleteConfirm && deleteTarget?.id == file.id },
-                            set: { newValue in
-                                if !newValue {
-                                    showDeleteConfirm = false
-                                    deleteTarget = nil
-                                }
-                            }
-                        ),
-                        attachmentAnchor: .rect(.bounds),
-                        arrowEdge: .bottom
-                    ) {
-                        GlassDialogCard(
-                            title: "删除确认",
-                            message: "确定把「\(file.name)」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。",
-                            width: 300
-                        ) {
-                            GlassDialogButton(title: "移入回收站", role: .destructive) {
-                                showDeleteConfirm = false
-                                deleteTarget = nil
-                                performDelete(file)
-                            }
-                            Divider()
-                            GlassDialogButton(title: "取消", bold: true) {
-                                showDeleteConfirm = false
-                                deleteTarget = nil
-                            }
-                        }
-                        // iPhone 紧凑宽度也以气泡呈现，不沉到底部
-                        .presentationCompactAdaptation(.popover)
                     }
 
                     if index < items.count - 1 {
@@ -329,7 +318,7 @@ struct FilesView: View {
             Label("重命名", systemImage: "pencil")
         }
         Button(role: .destructive) {
-            // 稍延迟，等操作菜单/长按菜单收起后再弹出锚定本行的确认气泡
+            // 稍延迟，等操作菜单收起后再弹出居中的删除确认弹窗，避免呈现冲突
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 deleteTarget = file
                 showDeleteConfirm = true
@@ -437,7 +426,8 @@ struct FilesView: View {
         }
     }
 
-    private func performDelete(_ target: QFFile) {
+    private func performDelete() {
+        guard let target = deleteTarget else { return }
         Task {
             do {
                 try await ApiClient.shared.delete(id: target.id)
