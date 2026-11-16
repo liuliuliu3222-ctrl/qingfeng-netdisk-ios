@@ -77,7 +77,22 @@ struct FilesView: View {
     @State private var sharePassword = ""
     @State private var showShare = false
 
+    /// 文件夹导航方向：进入子页为前向（新页从右滑入、旧页向左滑出），
+    /// 返回为后向（父页从左滑入、子页向右滑出）。配合 250ms 原生转场。
+    @State private var navigatingForward = true
+
     private var currentParentId: Int? { stack.last?.folderId }
+
+    /// 文件夹进出的水平转场：前进=右侧进入/左侧离开，后退=左侧进入/右侧离开。
+    private var folderTransition: AnyTransition {
+        if navigatingForward {
+            return .asymmetric(insertion: .move(edge: .trailing),
+                               removal: .move(edge: .leading))
+        } else {
+            return .asymmetric(insertion: .move(edge: .leading),
+                               removal: .move(edge: .trailing))
+        }
+    }
 
     private var pathText: String {
         stack.map { $0.name }.joined(separator: " / ")
@@ -103,21 +118,29 @@ struct FilesView: View {
 
             searchBar
 
-            ScrollView {
-                VStack(spacing: 12) {
-                    if items.isEmpty && !loading {
-                        MDEmptyState(icon: searchMode ? "magnifyingglass" : "folder",
-                                     title: searchMode ? "没有匹配的文件" : "这个文件夹还是空的",
-                                     detail: searchMode ? nil : "点右下角按钮上传文件，或新建文件夹")
-                            .frame(minHeight: 320)
-                    } else {
-                        fileList
+            // 文件夹内容：以当前文件夹身份驱动 250ms 水平转场。
+            // 用 ZStack 让进/出两页在同一区域重叠滑动，呈现出原生 push/pop 观感；
+            // id 只随文件夹层级变化，刷新/搜索不动它，因此不会被误触发。
+            ZStack(alignment: .top) {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        if items.isEmpty && !loading {
+                            MDEmptyState(icon: searchMode ? "magnifyingglass" : "folder",
+                                         title: searchMode ? "没有匹配的文件" : "这个文件夹还是空的",
+                                         detail: searchMode ? nil : "点右下角按钮上传文件，或新建文件夹")
+                                .frame(minHeight: 320)
+                        } else {
+                            fileList
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 96)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 96)
+                .refreshable { await reload() }
+                .id(stack.last?.id ?? UUID())
+                .transition(folderTransition)
             }
-            .refreshable { await reload() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(MD3.background.ignoresSafeArea())
         .overlay(alignment: .bottomTrailing) {
@@ -126,8 +149,8 @@ struct FilesView: View {
                 .padding(.bottom, 100)
         }
         .task { await load(parentId: currentParentId) }
-        // 上传选项：系统原生 confirmationDialog
-        .confirmationDialog("上传文件", isPresented: $showSourceDialog, titleVisibility: .visible) {
+        // 上传选项：系统原生居中弹窗（与设置页退出登录一致），功能与文案不变
+        .alert("上传文件", isPresented: $showSourceDialog) {
             Button("从「文件」选择") { showFilePicker = true }
             Button("从「照片」选择") { showPhotoPicker = true }
             Button("取消", role: .cancel) {}
@@ -174,8 +197,8 @@ struct FilesView: View {
         } message: {
             Text("将生成分享链接并复制到剪贴板")
         }
-        // 删除确认弹窗：系统原生 confirmationDialog，文案/按钮/执行逻辑不变
-        .confirmationDialog("删除确认", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        // 删除确认弹窗：系统原生居中弹窗（与设置页退出登录一致），文案/按钮/执行逻辑不变
+        .alert("删除确认", isPresented: $showDeleteConfirm) {
             Button("移入回收站", role: .destructive) { performDelete() }
             Button("取消", role: .cancel) {}
         } message: {
@@ -313,7 +336,11 @@ struct FilesView: View {
                 searchMode = false
                 stack = [FolderPath(folderId: nil, name: "全部文件")]
             }
-            stack.append(FolderPath(folderId: file.id, name: file.name))
+            // 进入子页：前向转场（新页从右滑入），250ms 原生时长
+            navigatingForward = true
+            withAnimation(.easeInOut(duration: 0.25)) {
+                stack.append(FolderPath(folderId: file.id, name: file.name))
+            }
             Task { await load(parentId: currentParentId) }
         } else {
             previewTarget = file
@@ -322,7 +349,11 @@ struct FilesView: View {
 
     private func goBack() {
         guard stack.count > 1 else { return }
-        stack.removeLast()
+        // 返回父页：后向转场（新页从左滑入、子页向右滑出）
+        navigatingForward = false
+        withAnimation(.easeInOut(duration: 0.25)) {
+            stack.removeLast()
+        }
         Task { await load(parentId: currentParentId) }
     }
 

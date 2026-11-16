@@ -163,8 +163,8 @@ struct SettingsView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: toast.message)
-        // 退出登录确认：系统原生 confirmationDialog
-        .confirmationDialog("退出登录", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
+        // 退出登录确认：系统原生居中弹窗（与文件页上传/删除弹窗样式一致）
+        .alert("退出登录", isPresented: $showLogoutConfirm) {
             Button("退出", role: .destructive) {
                 session.logout()
                 dismiss()

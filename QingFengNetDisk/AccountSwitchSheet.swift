@@ -166,12 +166,11 @@ struct AccountSwitchSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            Button(role: .destructive) {
-                deletingAccount = account
-            } label: {
-                Label("删除账号", systemImage: "trash")
-            }
+        // 长按直接触发删除确认：不再使用系统 contextMenu，
+        // 避免长按时系统给来源行附加的抬起圆角 + 额外外阴影，
+        // 让长按态与常态保持一致的干净视觉（删除确认弹窗本身不变）。
+        .onLongPressGesture(minimumDuration: 0.5) {
+            deletingAccount = account
         }
     }
 
