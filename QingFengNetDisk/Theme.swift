@@ -442,3 +442,157 @@ struct MDRow: View {
         .buttonStyle(.plain)
     }
 }
+
+// MARK: - 刷新图标（点击顺时针旋转，时长与刷新任务匹配）
+
+/// 右上角刷新图标：点击后顺时针持续旋转，异步刷新任务完成时回到整圈角度并停止。
+/// 不改动外部刷新逻辑，只负责图标的视觉反馈。
+struct SpinningRefreshIcon: View {
+    let tint: Color
+    let size: CGFloat
+    let hitSize: CGFloat
+    let action: () async -> Void
+
+    @State private var spinning = false
+    @State private var turns: Double = 0
+
+    init(tint: Color = MD3.onSurfaceVariant,
+         size: CGFloat = 20,
+         hitSize: CGFloat = 42,
+         action: @escaping () async -> Void) {
+        self.tint = tint
+        self.size = size
+        self.hitSize = hitSize
+        self.action = action
+    }
+
+    var body: some View {
+        Image(systemName: "arrow.clockwise")
+            .font(.system(size: size, weight: .medium))
+            .foregroundStyle(tint)
+            .rotationEffect(.degrees(turns * 360))
+            .animation(spinning
+                       ? .linear(duration: 0.8).repeatForever(autoreverses: false)
+                       : .default,
+                       value: turns)
+            .frame(width: hitSize, height: hitSize)
+            .contentShape(Rectangle())
+            .onTapGesture { start() }
+    }
+
+    private func start() {
+        guard !spinning else { return }
+        spinning = true
+        turns += 1
+        Task {
+            // 保证至少转满约一圈（0.8s），让瞬时刷新（如传输页本机重绘）也能看到反馈
+            let started = Date()
+            await action()
+            let elapsed = Date().timeIntervalSince(started)
+            if elapsed < 0.8 {
+                try? await Task.sleep(nanoseconds: UInt64((0.8 - elapsed) * 1_000_000_000))
+            }
+            spinning = false
+            turns = turns.rounded(.up)
+        }
+    }
+}
+
+// MARK: - 统一玻璃确认弹窗（退出登录 / 删除确认 / 上传选项共用）
+
+/// 玻璃弹窗按钮行：视觉与系统 confirmationDialog 按钮一致——通栏、分隔线，
+/// 破坏性按钮红色、取消按钮加粗。
+struct GlassDialogButton: View {
+    let title: String
+    var role: ButtonRole? = nil
+    var bold = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: role, action: action) {
+            Text(title)
+                .font(.system(size: 16, weight: bold ? .semibold : .regular))
+                .foregroundStyle(role == .destructive ? Color.red : Color.accentColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 可选宽度修饰：nil 时不限制（用于 popover 内自适应宽度）。
+private struct OptionalWidthModifier: ViewModifier {
+    let width: CGFloat?
+    func body(content: Content) -> some View {
+        if let width { content.frame(width: width) }
+        else { content }
+    }
+}
+
+/// 玻璃弹窗卡片：标题（可选说明）+ 一组按钮，毛玻璃背景、圆角与描边，
+/// 与系统确认弹窗玻璃质感一致，但可自定义呈现位置与动画。
+struct GlassDialogCard<Content: View>: View {
+    let title: String
+    var message: String? = nil
+    var width: CGFloat? = 280
+    @ViewBuilder var actions: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+
+            if let message, !message.isEmpty {
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 14)
+            }
+
+            Divider()
+            actions
+        }
+        .modifier(OptionalWidthModifier(width: width))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.18), radius: 18, x: 0, y: 8)
+    }
+}
+
+/// 屏幕居中的玻璃弹窗容器：半透明遮罩 + 居中卡片。
+/// 淡入 / 淡出使用同一条 easeInOut 动画，时长完全一致（0.22s）。
+struct GlassDialogOverlay<Content: View>: View {
+    @Binding var isPresented: Bool
+    @ViewBuilder var content: Content
+
+    private let duration = 0.22
+
+    var body: some View {
+        ZStack {
+            if isPresented {
+                Color.black.opacity(0.32)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation { isPresented = false } }
+                    .transition(.opacity)
+
+                content
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
+        .animation(.easeInOut(duration: duration), value: isPresented)
+        .allowsHitTesting(isPresented)
+    }
+}

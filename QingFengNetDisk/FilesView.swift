@@ -94,9 +94,7 @@ struct FilesView: View {
                     HStack(spacing: 0) {
                         MDIconButton(icon: "folder.badge.plus") { showNewFolder = true }
                         MDIconButton(icon: "trash") { showTrash = true }
-                        MDIconButton(icon: "arrow.clockwise") {
-                            Task { await reload() }
-                        }
+                        SpinningRefreshIcon { await reload() }
                     }
                 )
             )
@@ -126,12 +124,25 @@ struct FilesView: View {
                 .padding(.bottom, 100)
         }
         .task { await load(parentId: currentParentId) }
-        .confirmationDialog("上传文件", isPresented: $showSourceDialog, titleVisibility: .visible) {
-            Button("从「文件」选择") { showFilePicker = true }
-            Button("从「照片」选择") { showPhotoPicker = true }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("上传到：\(stack.last?.name ?? "全部文件")")
+        // 上传选项：屏幕居中的玻璃弹窗，样式与退出登录统一，无气泡箭头
+        .overlay {
+            GlassDialogOverlay(isPresented: $showSourceDialog) {
+                GlassDialogCard(title: "上传文件", message: "上传到：\(stack.last?.name ?? "全部文件")") {
+                    GlassDialogButton(title: "从「文件」选择") {
+                        withAnimation { showSourceDialog = false }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { showFilePicker = true }
+                    }
+                    Divider()
+                    GlassDialogButton(title: "从「照片」选择") {
+                        withAnimation { showSourceDialog = false }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { showPhotoPicker = true }
+                    }
+                    Divider()
+                    GlassDialogButton(title: "取消", bold: true) {
+                        showSourceDialog = false
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showFilePicker) {
             DocumentPicker(allowsMultiple: true) { urls in
@@ -172,15 +183,6 @@ struct FilesView: View {
             Button("创建") { createShare() }
         } message: {
             Text("将生成分享链接并复制到剪贴板")
-        }
-        // 删除确认弹窗：样式与「我的-退出登录」弹窗完全一致
-        // （confirmationDialog + titleVisibility .visible + 破坏性按钮 + 取消按钮），
-        // 弹窗内文字与点击执行逻辑保持不变。
-        .confirmationDialog("删除确认", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("移入回收站", role: .destructive) { performDelete() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("确定把「\(deleteTarget?.name ?? "")」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。")
         }
         .onDisappear { searchTask?.cancel() }
     }
@@ -231,46 +233,58 @@ struct FilesView: View {
         MDCard(padding: 0) {
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, file in
-                    Button {
-                        open(file)
-                    } label: {
-                        FileRow(file: file)
+                    ZStack(alignment: .trailing) {
+                        Button {
+                            open(file)
+                        } label: {
+                            FileRow(file: file, showsChevron: false)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu { fileMenuContent(for: file) }
+
+                        // 右侧三点：点击直接弹出与长按完全一致的操作菜单，对齐本行
+                        Menu {
+                            fileMenuContent(for: file)
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(MD3.onSurfaceVariant.opacity(0.7))
+                                .frame(width: 44, height: 66)
+                                .contentShape(Rectangle())
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        if file.isFolder {
-                            Button {
-                                open(file)
-                            } label: {
-                                Label("打开", systemImage: "folder")
+                    // 删除确认：玻璃弹窗（与退出登录一致），锚定在被点击/长按的同一文件行
+                    .popover(
+                        isPresented: Binding(
+                            get: { showDeleteConfirm && deleteTarget?.id == file.id },
+                            set: { newValue in
+                                if !newValue {
+                                    showDeleteConfirm = false
+                                    deleteTarget = nil
+                                }
                             }
-                        } else {
-                            Button {
-                                previewTarget = file
-                            } label: {
-                                Label("预览 / 下载", systemImage: "eye")
+                        ),
+                        attachmentAnchor: .rect(.bounds),
+                        arrowEdge: .bottom
+                    ) {
+                        GlassDialogCard(
+                            title: "删除确认",
+                            message: "确定把「\(file.name)」移入回收站？文件夹将连同其中内容一起移入，可在回收站内还原。",
+                            width: 300
+                        ) {
+                            GlassDialogButton(title: "移入回收站", role: .destructive) {
+                                showDeleteConfirm = false
+                                deleteTarget = nil
+                                performDelete(file)
+                            }
+                            Divider()
+                            GlassDialogButton(title: "取消", bold: true) {
+                                showDeleteConfirm = false
+                                deleteTarget = nil
                             }
                         }
-                        Button {
-                            shareTarget = file
-                            sharePassword = ""
-                            showShare = true
-                        } label: {
-                            Label("分享链接", systemImage: "link")
-                        }
-                        Button {
-                            renameTarget = file
-                            renameText = file.name
-                            showRename = true
-                        } label: {
-                            Label("重命名", systemImage: "pencil")
-                        }
-                        Button(role: .destructive) {
-                            deleteTarget = file
-                            showDeleteConfirm = true
-                        } label: {
-                            Label("删除", systemImage: "trash")
-                        }
+                        // iPhone 紧凑宽度也以气泡呈现，不沉到底部
+                        .presentationCompactAdaptation(.popover)
                     }
 
                     if index < items.count - 1 {
@@ -280,6 +294,48 @@ struct FilesView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: 操作菜单（长按与三点按钮共用同一份内容，保证完全一致）
+
+    @ViewBuilder
+    private func fileMenuContent(for file: QFFile) -> some View {
+        if file.isFolder {
+            Button {
+                open(file)
+            } label: {
+                Label("打开", systemImage: "folder")
+            }
+        } else {
+            Button {
+                previewTarget = file
+            } label: {
+                Label("预览 / 下载", systemImage: "eye")
+            }
+        }
+        Button {
+            shareTarget = file
+            sharePassword = ""
+            showShare = true
+        } label: {
+            Label("分享链接", systemImage: "link")
+        }
+        Button {
+            renameTarget = file
+            renameText = file.name
+            showRename = true
+        } label: {
+            Label("重命名", systemImage: "pencil")
+        }
+        Button(role: .destructive) {
+            // 稍延迟，等操作菜单/长按菜单收起后再弹出锚定本行的确认气泡
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                deleteTarget = file
+                showDeleteConfirm = true
+            }
+        } label: {
+            Label("删除", systemImage: "trash")
         }
     }
 
@@ -381,8 +437,7 @@ struct FilesView: View {
         }
     }
 
-    private func performDelete() {
-        guard let target = deleteTarget else { return }
+    private func performDelete(_ target: QFFile) {
         Task {
             do {
                 try await ApiClient.shared.delete(id: target.id)

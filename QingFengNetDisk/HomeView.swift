@@ -35,9 +35,7 @@ struct HomeView: View {
                 trailing: AnyView(
                     HStack(spacing: 0) {
                         MDIconButton(icon: "magnifyingglass") { switchToFiles() }
-                        MDIconButton(icon: "arrow.clockwise") {
-                            Task { await refresh() }
-                        }
+                        SpinningRefreshIcon { await refresh() }
                     }
                 )
             )

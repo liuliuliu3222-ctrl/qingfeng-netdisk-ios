@@ -42,9 +42,7 @@ struct TrashView: View {
                 onBack: { dismiss() },
                 trailing: AnyView(
                     HStack(spacing: 0) {
-                        MDIconButton(icon: "arrow.clockwise") {
-                            Task { await load() }
-                        }
+                        SpinningRefreshIcon { await load() }
                         MDIconButton(icon: "trash.slash", tint: MD3.error) {
                             showEmptyConfirm = true
                         }

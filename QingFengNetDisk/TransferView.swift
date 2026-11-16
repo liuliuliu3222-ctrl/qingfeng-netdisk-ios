@@ -68,12 +68,8 @@ struct TransferView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            Button {
-                store.objectWillChange.send()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(MD3.primary)
+            SpinningRefreshIcon(tint: MD3.primary, size: 16, hitSize: 38) {
+                await MainActor.run { store.objectWillChange.send() }
             }
         }
         .padding(.horizontal, 16)
