@@ -140,38 +140,39 @@ struct AccountSwitchSheet: View {
     }
 
     private func accountRow(_ account: String, isCurrent: Bool) -> some View {
-        Button {
+        // 用「非 Button 视图 + 两个独立手势」替代 Button：
+        // Button 内建的 tap 手势会与 onLongPressGesture 竞争，导致长按删除确认不弹出。
+        // 拆开后短按=切换账号、长按=弹出删除确认，互不干扰；
+        // 同时不使用系统 contextMenu，长按态与常态视觉一致、无抬起外阴影。
+        HStack(spacing: 12) {
+            accountAvatar
+            Text(account)
+                .font(.system(size: 17))
+                .foregroundStyle(qfGreen)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if isCurrent {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(qfGreen)
+            }
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 58)
+        .contentShape(Rectangle())
+        .onTapGesture {
             if isCurrent {
                 ToastCentre.shared.show("当前已登录该账号")
             } else {
                 session.switchAccount(to: account)
                 dismiss()
             }
-        } label: {
-            HStack(spacing: 12) {
-                accountAvatar
-                Text(account)
-                    .font(.system(size: 17))
-                    .foregroundStyle(qfGreen)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if isCurrent {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(qfGreen)
-                }
-            }
-            .padding(.horizontal, 18)
-            .frame(height: 58)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        // 长按直接触发删除确认：不再使用系统 contextMenu，
-        // 避免长按时系统给来源行附加的抬起圆角 + 额外外阴影，
-        // 让长按态与常态保持一致的干净视觉（删除确认弹窗本身不变）。
-        .onLongPressGesture(minimumDuration: 0.5) {
-            deletingAccount = account
-        }
+        // 高优先级长按：长按成功时压制 tap，只弹删除确认，避免切换账号/关闭页面抢先触发。
+        .highPriorityGesture(
+            LongPressGesture(minimumDuration: 0.5)
+                .onEnded { _ in deletingAccount = account }
+        )
     }
 
     // MARK: - 添加新账号卡片（纯绿色线条图标，无圆形底）
