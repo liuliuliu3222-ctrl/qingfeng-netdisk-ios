@@ -83,14 +83,15 @@ struct FilesView: View {
 
     private var currentParentId: Int? { stack.last?.folderId }
 
-    /// 文件夹进出的水平转场：前进=右侧进入/左侧离开，后退=左侧进入/右侧离开。
+    /// 文件夹进出的水平转场：新页从对应方向滑入；旧页立即移除（removal = .identity），
+    /// 避免进/出文件夹时旧目录内容残留、与新页交叠迟迟不消失。
     private var folderTransition: AnyTransition {
         if navigatingForward {
             return .asymmetric(insertion: .move(edge: .trailing),
-                               removal: .move(edge: .leading))
+                               removal: .identity)
         } else {
             return .asymmetric(insertion: .move(edge: .leading),
-                               removal: .move(edge: .trailing))
+                               removal: .identity)
         }
     }
 
@@ -254,14 +255,16 @@ struct FilesView: View {
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, file in
                     ZStack(alignment: .trailing) {
-                        Button {
-                            open(file)
+                        // 点击整行=打开/预览（primaryAction）；长按=弹出系统菜单。
+                        // 使用 Menu 而非 contextMenu：长按不会有放大预览/遮罩/褶皱，
+                        // 按上去只有系统按压的轻微变淡，与首页「最近使用」的观感一致。
+                        Menu {
+                            fileMenuContent(for: file)
                         } label: {
                             FileRow(file: file, showsChevron: false)
+                        } primaryAction: {
+                            open(file)
                         }
-                        .buttonStyle(.plain)
-                        // 长按：与三点按钮共用同一份菜单内容，保证完全一致
-                        .contextMenu { fileMenuContent(for: file) }
 
                         // 右侧三点：点击直接弹出与长按完全一致的操作菜单，对齐本行
                         Menu {

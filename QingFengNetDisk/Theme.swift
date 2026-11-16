@@ -490,6 +490,8 @@ struct SpinningRefreshIcon: View {
         Task {
             try? await Task.sleep(nanoseconds: 430_000_000)
             spinning = false
+            // 转圈结束（刷新动画完成）给出触感反馈，四页共用组件自动生效
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
     }
 }

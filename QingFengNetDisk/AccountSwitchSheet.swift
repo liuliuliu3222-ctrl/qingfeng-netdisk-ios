@@ -20,6 +20,8 @@ struct AccountSwitchSheet: View {
 
     @State private var deletingAccount: String?
     @State private var showAddAccountLogin = false
+    /// 当前被按住的账号（驱动账号名按压变淡，与首页文件按压观感一致）
+    @State private var pressedAccount: String?
 
     // 目标截图实测配色：全页面统一纯色 #2FAE7A，不再使用渐变
     private let qfGreen = MD3.primary                              // 浅色 = #2FAE7A
@@ -149,6 +151,8 @@ struct AccountSwitchSheet: View {
             Text(account)
                 .font(.system(size: 17))
                 .foregroundStyle(qfGreen)
+                .opacity(pressedAccount == account ? 0.45 : 1.0)
+                .animation(.easeOut(duration: 0.12), value: pressedAccount)
                 .lineLimit(1)
             Spacer(minLength: 8)
             if isCurrent {
@@ -175,6 +179,18 @@ struct AccountSwitchSheet: View {
                     // 长按命中给出触感反馈，再弹出删除确认
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     deletingAccount = account
+                    pressedAccount = nil
+                }
+        )
+        // 按压即让账号名轻微变淡、松手恢复，与首页文件按下的观感一致。
+        // 用低优先级 simultaneousGesture，不干扰上面的长按/点击手势。
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if pressedAccount != account { pressedAccount = account }
+                }
+                .onEnded { _ in
+                    if pressedAccount == account { pressedAccount = nil }
                 }
         )
     }
