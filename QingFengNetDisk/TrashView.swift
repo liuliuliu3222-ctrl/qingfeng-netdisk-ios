@@ -33,6 +33,10 @@ struct TrashView: View {
     @State private var showPurgeConfirm = false
     @State private var showEmptyConfirm = false
 
+    /// 回收站文件行长按操作（居中系统弹窗：还原 / 彻底删除）
+    @State private var restoreTarget: QFFile?
+    @State private var showTrashItemMenu = false
+
     var body: some View {
         VStack(spacing: 0) {
             MDTopAppBar(
@@ -67,20 +71,13 @@ struct TrashView: View {
                         MDCard(padding: 0) {
                             VStack(spacing: 0) {
                                 ForEach(Array(items.enumerated()), id: \.element.id) { index, file in
-                                    FileRow(file: file, showsChevron: false)
-                                        .contextMenu {
-                                            Button {
-                                                restore(file)
-                                            } label: {
-                                                Label("还原", systemImage: "arrow.uturn.left")
-                                            }
-                                            Button(role: .destructive) {
-                                                purgeTarget = file
-                                                showPurgeConfirm = true
-                                            } label: {
-                                                Label("彻底删除", systemImage: "trash")
-                                            }
-                                        }
+                                    // 与文件页同款：UIKit 原生长按，无系统 contextMenu 的放大/遮罩，
+                                    // 按住变淡、长按弹居中操作弹窗，滑动不受影响。
+                                    TrashItemRow(file: file) {
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        restoreTarget = file
+                                        showTrashItemMenu = true
+                                    }
                                     if index < items.count - 1 {
                                         Divider()
                                             .overlay(MD3.outlineVariant)
@@ -109,6 +106,20 @@ struct TrashView: View {
         .animation(.easeOut(duration: 0.2), value: toast.message)
         .task { await load() }
         // 彻底删除确认：系统原生居中弹窗（与设置页退出登录一致），文案/按钮不变
+        // 回收站文件行长按操作：系统原生居中弹窗（还原 / 彻底删除）
+        .alert("文件操作", isPresented: $showTrashItemMenu, presenting: restoreTarget) { file in
+            Button("还原") { restore(file) }
+            Button("彻底删除", role: .destructive) {
+                // 稍延迟，等操作菜单收起后再弹彻底删除确认，避免呈现冲突
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    purgeTarget = file
+                    showPurgeConfirm = true
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: { file in
+            Text(file.name)
+        }
         .alert("彻底删除", isPresented: $showPurgeConfirm) {
             Button("删除", role: .destructive) { performPurge() }
             Button("取消", role: .cancel) {}
@@ -173,5 +184,25 @@ struct TrashView: View {
                 toast.show(error.localizedDescription)
             }
         }
+    }
+}
+
+/// 回收站文件行：与文件页 FileActionRow 同款交互。
+/// 用 UIKit 原生长按识别器（FileLongPressDetector），无系统 contextMenu 的放大/遮罩；
+/// 按住变淡、长按弹居中操作弹窗，按在行上滑动时列表照常滚动、下拉刷新照常。
+private struct TrashItemRow: View {
+    let file: QFFile
+    let onLongPress: () -> Void
+
+    @State private var pressing = false
+
+    var body: some View {
+        FileRow(file: file, showsChevron: false, dimmed: pressing)
+            .contentShape(Rectangle())
+            .overlay(
+                FileLongPressDetector(pressing: $pressing) {
+                    onLongPress()
+                }
+            )
     }
 }

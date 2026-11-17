@@ -616,7 +616,7 @@ private struct FileActionRow: View {
 /// 用 UIKit 原生长按识别器承载「按住变淡 + 长按弹菜单」。
 /// 原生识别器与 UIScrollView 有系统级手势协调，按在文件上滑动时页面照常滚动，
 /// 不会出现纯 SwiftUI LongPressGesture 在列表里抢占滚动导致「滑不动」的问题。
-private struct FileLongPressDetector: UIViewRepresentable {
+struct FileLongPressDetector: UIViewRepresentable {
     @Binding var pressing: Bool
     let onLongPress: () -> Void
 
