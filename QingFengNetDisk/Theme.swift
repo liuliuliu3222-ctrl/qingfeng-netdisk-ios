@@ -473,8 +473,8 @@ struct SpinningRefreshIcon: View {
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(tint)
             .rotationEffect(.degrees(turns * 360))
-            // 匀速转完这一圈（0.32s），到整圈角度后自然停止
-            .animation(.linear(duration: 0.32), value: turns)
+            // 匀速转完这一圈（0.3s），到整圈角度后自然停止
+            .animation(.linear(duration: 0.3), value: turns)
             .frame(width: hitSize, height: hitSize)
             .contentShape(Rectangle())
             .onTapGesture { start() }

@@ -76,8 +76,6 @@ struct FilesView: View {
     /// 文件行长按操作（居中系统 alert，与账号删除确认一致）
     @State private var menuTarget: QFFile?
     @State private var showFileMenu = false
-    /// 当前被按住的文件行 id，驱动文件名按压变淡（与账号行观感一致）
-    @State private var pressedFileId: Int?
 
     @State private var shareTarget: QFFile?
     @State private var sharePassword = ""
@@ -296,37 +294,18 @@ struct FilesView: View {
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, file in
                     ZStack(alignment: .trailing) {
-                        // 与切换账号账号行完全同款的纯手势结构：
-                        // 点击整行=打开/预览；长按=弹出居中系统操作菜单；按住=文件名轻微变淡。
-                        // 不再用 Menu + primaryAction：Menu 长按底层是 contextMenu（放大+遮罩+褶皱），
-                        // 且松手会误触发 primaryAction 打开/进入子页，导致文件看起来"消失"。
-                        HStack(spacing: 0) {
-                            FileRow(file: file,
-                                    showsChevron: false,
-                                    dimmed: pressedFileId == file.id)
-                            Spacer(minLength: 0)
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture { open(file) }
-                        // 高优先级长按：命中时震动并弹居中操作菜单，压制 tap 避免误打开。
-                        .highPriorityGesture(
-                            LongPressGesture(minimumDuration: 0.5)
-                                .onEnded { _ in
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                    menuTarget = file
-                                    showFileMenu = true
-                                    pressedFileId = nil
-                                }
-                        )
-                        // 按住即让文件名变淡、松手恢复，不干扰 tap / 长按。
-                        .simultaneousGesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { _ in
-                                    if pressedFileId != file.id { pressedFileId = file.id }
-                                }
-                                .onEnded { _ in
-                                    if pressedFileId == file.id { pressedFileId = nil }
-                                }
+                        // 按压变淡 + 长按菜单 + 轻点打开，交给独立子视图处理。
+                        // 按压态由 LongPressGesture.updating 驱动 @GestureState：
+                        // 按住时文件名变淡（与切换账号视频观感一致），手指一滑即被系统判为滚动、
+                        // 手势失败会自动复位，既不拦截 ScrollView、也不误变灰，下拉刷新照常工作。
+                        FileActionRow(
+                            file: file,
+                            onTap: { open(file) },
+                            onLongPress: {
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                menuTarget = file
+                                showFileMenu = true
+                            }
                         )
 
                         // 右侧三点：点击直接弹出与长按完全一致的操作菜单，对齐本行
@@ -585,5 +564,34 @@ struct FilesView: View {
             await load(parentId: parent)
             await session.refreshProfile()
         }
+    }
+}
+
+/// 文件行交互：轻点打开、长按弹菜单、按住时文件名轻微变淡。
+///
+/// 关键点：按压变淡用 `LongPressGesture.updating` 驱动 `@GestureState`，而不是
+/// `DragGesture(minimumDistance: 0)`。后者手指一落就激活，会抢占 ScrollView 的滚动手势，
+/// 造成「列表滑不动 / 下拉刷新失效 / 一滑文件名就变灰」。
+/// LongPressGesture 只认「按住不动」，一旦手指移动，系统判为滚动，手势失败、
+/// `@GestureState` 自动复位为 false，文件名瞬间恢复，滚动与下拉刷新完全不受影响。
+private struct FileActionRow: View {
+    let file: QFFile
+    let onTap: () -> Void
+    let onLongPress: () -> Void
+
+    @GestureState private var pressing = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            FileRow(file: file, showsChevron: false, dimmed: pressing)
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+        .highPriorityGesture(
+            LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
+                .updating($pressing) { value, state, _ in state = value }
+                .onEnded { _ in onLongPress() }
+        )
     }
 }

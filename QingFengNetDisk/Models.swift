@@ -203,6 +203,7 @@ struct TransferTask: Identifiable, Hashable {
         case running = 0
         case done = 1
         case failed = 2
+        case paused = 3
     }
 
     let id = UUID()
@@ -212,6 +213,8 @@ struct TransferTask: Identifiable, Hashable {
     var done: Int64 = 0
     var state: State = .running
     var message: String = ""
+    /// 下载任务落盘的本地文件路径，删除任务时一并删除本地文件
+    var localPath: String?
 
     var percent: Int {
         guard total > 0 else { return state == .done ? 100 : 0 }
@@ -226,6 +229,8 @@ struct TransferTask: Identifiable, Hashable {
             return "失败：\(message.isEmpty ? "未知错误" : message)"
         case .running:
             return "进行中 \(percent)% · \(ByteText.string(done)) / \(ByteText.string(total))"
+        case .paused:
+            return "已暂停 \(percent)% · \(ByteText.string(done)) / \(ByteText.string(total))"
         }
     }
 }

@@ -46,6 +46,8 @@ struct TrashView: View {
                             _ = Task { await load() }
                         }
                         MDIconButton(icon: "trash.slash", tint: MD3.error) {
+                            // 点击垃圾桶图标立即给出触感反馈，再弹居中确认
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                             showEmptyConfirm = true
                         }
                     }

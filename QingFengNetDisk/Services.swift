@@ -12,6 +12,8 @@ final class TransferStore: ObservableObject {
 
     @Published private(set) var tasks: [TransferTask] = []
 
+    /// 被暂停的任务 id。上传/下载协程在每步推进前查询，暂停时原地挂起等待恢复。
+    private var pausedIDs: Set<UUID> = []
     private let maxKeep = 50
 
     private init() {}
@@ -25,6 +27,12 @@ final class TransferStore: ObservableObject {
         return task.id
     }
 
+    /// 记录下载任务的落盘路径，供「删除本地文件」使用
+    func setLocalPath(id: UUID, path: String) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[index].localPath = path
+    }
+
     func update(id: UUID, done: Int64, total: Int64) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].done = done
@@ -35,6 +43,8 @@ final class TransferStore: ObservableObject {
 
     func finish(id: UUID, state: TransferTask.State, message: String) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        // 已暂停的任务不接收完成态，保持暂停显示，直到用户删除或恢复
+        if pausedIDs.contains(id) { return }
         tasks[index].state = state
         tasks[index].message = message
         if state == .done {
@@ -48,6 +58,57 @@ final class TransferStore: ObservableObject {
 
     func items(kind: TransferTask.Kind) -> [TransferTask] {
         tasks.filter { $0.kind == kind }
+    }
+
+    // MARK: - 暂停 / 恢复
+
+    func isPaused(_ id: UUID) -> Bool { pausedIDs.contains(id) }
+
+    /// 暂停所有进行中的任务（UI 立即显示「已暂停」，进度冻结）
+    func pauseAll() {
+        for index in tasks.indices where tasks[index].state == .running {
+            tasks[index].state = .paused
+            pausedIDs.insert(tasks[index].id)
+        }
+    }
+
+    /// 恢复所有暂停的任务回到进行中
+    func resumeAll() {
+        for index in tasks.indices where tasks[index].state == .paused {
+            tasks[index].state = .running
+            pausedIDs.remove(tasks[index].id)
+        }
+    }
+
+    /// 传输协程在推进前调用：暂停时挂起，恢复后返回 true；任务被删除则返回 false 应中止
+    func waitIfPaused(_ id: UUID) async -> Bool {
+        while isPaused(id) {
+            guard tasks.contains(where: { $0.id == id }) else { return false }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        return tasks.contains(where: { $0.id == id })
+    }
+
+    // MARK: - 删除（本地文件 + 列表记录）
+
+    /// 删除单个任务：先删除已落盘的本地文件，再从列表移除
+    func delete(id: UUID) {
+        guard let task = tasks.first(where: { $0.id == id }) else { return }
+        deleteLocalFile(of: task)
+        pausedIDs.remove(id)
+        tasks.removeAll { $0.id == id }
+    }
+
+    /// 清空全部任务：删除所有已落盘的本地文件，再清空列表
+    func deleteAll() {
+        for task in tasks { deleteLocalFile(of: task) }
+        pausedIDs.removeAll()
+        tasks.removeAll()
+    }
+
+    private func deleteLocalFile(of task: TransferTask) {
+        guard let path = task.localPath, !path.isEmpty else { return }
+        try? FileManager.default.removeItem(atPath: path)
     }
 }
 
@@ -98,6 +159,8 @@ enum Uploader {
 
             var sent: Int64 = 0
             for index in 0..<totalChunks {
+                // 暂停时原地挂起；任务被删除则中止上传
+                guard await TransferStore.shared.waitIfPaused(taskId) else { return }
                 let data = try handle.read(upToCount: ApiClient.chunkSize) ?? Data()
                 if data.isEmpty { break }
                 try await ApiClient.shared.uploadChunk(uploadId: uploadId, index: index, data: data)
@@ -144,6 +207,7 @@ enum Downloader {
     static func download(file: QFFile) async throws -> URL {
         let target = destination(for: file.name, id: file.id)
         let taskId = await TransferStore.shared.begin(kind: .download, name: file.name, total: file.size)
+        await TransferStore.shared.setLocalPath(id: taskId, path: target.path)
         do {
             try await ApiClient.shared.download(id: file.id, to: target) { done, total in
                 Task { @MainActor in
