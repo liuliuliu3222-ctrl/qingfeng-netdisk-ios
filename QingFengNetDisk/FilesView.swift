@@ -580,18 +580,39 @@ private struct FileActionRow: View {
     let onLongPress: () -> Void
 
     @GestureState private var pressing = false
+    /// 长按命中后吞掉随之而来的那次点击，避免误打开/误进入文件夹
+    @State private var suppressTap = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            FileRow(file: file, showsChevron: false, dimmed: pressing)
-            Spacer(minLength: 0)
+        // 与首页「最近使用」一致：点击交给原生 Button，滚动/下拉刷新完全不受影响。
+        Button {
+            if suppressTap {
+                suppressTap = false
+                return
+            }
+            onTap()
+        } label: {
+            HStack(spacing: 0) {
+                FileRow(file: file, showsChevron: false, dimmed: pressing)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
-        .onTapGesture { onTap() }
-        .highPriorityGesture(
+        .buttonStyle(.plain)
+        // 用 simultaneousGesture 而非 highPriorityGesture：不抢占父级 ScrollView 的滚动手势，
+        // 手指按在文件上滑动时页面照常上下滚动、下拉刷新照常工作；只有按住不动才命中长按。
+        // 一旦手指移动超过 10pt，LongPressGesture 失败、pressing 自动复位，不会误变灰/误弹菜单。
+        .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
                 .updating($pressing) { value, state, _ in state = value }
-                .onEnded { _ in onLongPress() }
+                .onEnded { _ in
+                    suppressTap = true
+                    onLongPress()
+                    // 兜底：alert 弹出时 Button 的 tap 可能不会回调，超时后清除避免吞掉下次正常点击
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        suppressTap = false
+                    }
+                }
         )
     }
 }

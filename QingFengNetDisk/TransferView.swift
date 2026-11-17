@@ -101,10 +101,12 @@ struct TransferView: View {
                 .buttonStyle(.plain)
             }
             Spacer(minLength: 4)
-            // 顺序：暂停、删除、刷新
+            // 顺序：暂停、删除、刷新。三个图标统一规格：size 16 / 品牌绿 / 34×34 热区，
+            // 与刷新图标完全同款风格。
             HStack(spacing: 0) {
-                // 暂停 / 继续：有进行中任务则暂停，否则恢复已暂停任务
-                MDIconButton(icon: hasRunning ? "pause.fill" : "play.fill", size: 17) {
+                // 暂停：固定两个竖棍 pause.fill，不再显示播放三角。
+                // 有进行中任务时点击暂停全部；都已暂停时点击恢复（图标始终不变）。
+                transferIconButton(icon: "pause.fill") {
                     if hasRunning {
                         store.pauseAll()
                     } else {
@@ -112,7 +114,7 @@ struct TransferView: View {
                     }
                 }
                 // 删除：删除全部（本地文件 + 列表记录），带居中确认
-                MDIconButton(icon: "trash", tint: MD3.error, size: 18) {
+                transferIconButton(icon: "trash") {
                     showClearConfirm = true
                 }
                 SpinningRefreshIcon(tint: MD3.primary, size: 16, hitSize: 34) {
@@ -122,6 +124,18 @@ struct TransferView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
+    }
+
+    /// 与刷新图标同款风格的传输页图标按钮：16pt / 品牌绿 / 34×34 热区
+    private func transferIconButton(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(MD3.primary)
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func taskRow(_ task: TransferTask) -> some View {
