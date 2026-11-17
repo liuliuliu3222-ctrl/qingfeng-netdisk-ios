@@ -53,7 +53,7 @@ struct TransferView: View {
         .alert("全部删除", isPresented: $showClearConfirm) {
             Button("全部删除", role: .destructive) {
                 store.deleteAll()
-                ToastCentre.shared.show("已删除全部传输任务")
+                ToastCentre.shared.show("已删除全部传输任务记录")
             }
             Button("取消", role: .cancel) {}
         } message: {

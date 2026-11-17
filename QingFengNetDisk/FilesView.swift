@@ -295,9 +295,9 @@ struct FilesView: View {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, file in
                     ZStack(alignment: .trailing) {
                         // 轻点打开、长按弹出居中系统操作菜单（与右侧三点菜单内容一致）。
-                        // 长按用 simultaneousGesture 与 ScrollView 滚动共存、不抢占优先级；
-                        // maximumDistance 让滑动超过 10pt 时手势自动失败，滚动/下拉刷新照常；
-                        // 按住变淡由 .updating 驱动，只有按满时长才变淡，滑动会自动复位不误变灰。
+                        // 长按改用 UIKit 原生识别器（FileLongPressDetector），与滚动系统级协调，
+                        // 彻底解决 SwiftUI 手势在列表里抢占滚动导致「滑不动」；
+                        // 按住变淡、滑动自动恢复，滚动/下拉刷新照常。
                         FileActionRow(
                             file: file,
                             onTap: { open(file) },
@@ -567,24 +567,24 @@ struct FilesView: View {
     }
 }
 
-/// 文件行交互：轻点打开/预览，长按弹出居中系统操作菜单。
+/// 文件行交互：轻点打开/预览，长按弹出居中系统操作菜单，按住时名字变淡。
 ///
-/// 关键设计（兼顾「长按要有菜单」与「滑动要顺畅」）：
-/// - 用 `onTapGesture` 处理轻点，而不是把长按挂在 Button 上，避免 Button 按压态干扰。
-/// - 长按用 `simultaneousGesture`：与父级 ScrollView 滚动手势共存、不抢占优先级，
-///   手指按在文件上滑动时页面照常滚动、下拉刷新照常工作。
-/// - `LongPressGesture(maximumDistance:)`：滑动超过 10pt 即判为滚动、长按自动失败，
-///   因此滑动不会误弹菜单。
-/// - 按住变淡由 `.updating($pressing)` 驱动：只有按住达到 minimumDuration 后 pressing 才为 true，
-///   手指一滑（超过 10pt）手势失败会自动复位为 false，所以滑动不会「一滑就变灰」；
-///   这与切换账号页账号行按压变淡是同一套机制。
+/// 关键设计（彻底解决「滑动滑不动 / 一滑就变灰」与「长按要变淡 + 弹菜单」的冲突）：
+/// - 长按检测改用 UIKit 原生 `UILongPressGestureRecognizer`（见 FileLongPressDetector），
+///   它与 UIScrollView 滚动手势经过系统级协调：手指滑动时系统判定为滚动、长按自动失败，
+///   既不抢占滚动、也不会一滑就变灰；而纯 SwiftUI 的 LongPressGesture 在列表里
+///   会与 ScrollView 竞争，是前几版「滑不动」的根因。
+/// - `cancelsTouchesInView = false` + `shouldRecognizeSimultaneouslyWith = true`：
+///   长按识别器不吞掉点击/滚动，页面照常滚动、下拉刷新照常工作。
+/// - 按住变淡由 `.began` 置 true、`.ended/.cancelled/.failed` 置 false 驱动，
+///   只在真正按住满 0.5s 且未滑动时才变淡，与切换账号页账号行观感一致。
 /// - 长按命中后 `suppressTap` 吞掉随之而来的那次点击，避免松手误打开/误进文件夹。
 private struct FileActionRow: View {
     let file: QFFile
     let onTap: () -> Void
     let onLongPress: () -> Void
 
-    @GestureState private var pressing = false
+    @State private var pressing = false
     @State private var suppressTap = false
 
     var body: some View {
@@ -593,6 +593,16 @@ private struct FileActionRow: View {
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
+        .overlay(
+            FileLongPressDetector(pressing: $pressing) {
+                suppressTap = true
+                onLongPress()
+                // 兜底清除：alert 弹出时 tap 回调可能不会抵达，避免吞掉下次正常点击
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    suppressTap = false
+                }
+            }
+        )
         .onTapGesture {
             if suppressTap {
                 suppressTap = false
@@ -600,17 +610,60 @@ private struct FileActionRow: View {
             }
             onTap()
         }
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
-                .updating($pressing) { value, state, _ in state = value }
-                .onEnded { _ in
-                    suppressTap = true
-                    onLongPress()
-                    // 兜底清除：alert 弹出时 tap 回调可能不会抵达，避免吞掉下次正常点击
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        suppressTap = false
-                    }
-                }
-        )
+    }
+}
+
+/// 用 UIKit 原生长按识别器承载「按住变淡 + 长按弹菜单」。
+/// 原生识别器与 UIScrollView 有系统级手势协调，按在文件上滑动时页面照常滚动，
+/// 不会出现纯 SwiftUI LongPressGesture 在列表里抢占滚动导致「滑不动」的问题。
+private struct FileLongPressDetector: UIViewRepresentable {
+    @Binding var pressing: Bool
+    let onLongPress: () -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = true
+        let lp = UILongPressGestureRecognizer(target: context.coordinator,
+                                              action: #selector(Coordinator.handle(_:)))
+        lp.minimumPressDuration = 0.5
+        lp.allowableMovement = 10
+        lp.cancelsTouchesInView = false  // 不吞掉点击与滚动
+        lp.delegate = context.coordinator
+        view.addGestureRecognizer(lp)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onLongPress = onLongPress
+        context.coordinator.pressing = $pressing
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onLongPress: (() -> Void)?
+        var pressing: Binding<Bool>?
+        private var didTrigger = false
+
+        @objc func handle(_ gr: UILongPressGestureRecognizer) {
+            switch gr.state {
+            case .began:
+                didTrigger = true
+                pressing?.wrappedValue = true
+                onLongPress?()
+            case .ended, .cancelled, .failed:
+                if didTrigger { pressing?.wrappedValue = false }
+                didTrigger = false
+            default:
+                break
+            }
+        }
+
+        // 与父级 ScrollView 滚动手势、子视图点击手势同时识别，互不吞掉
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
+        }
     }
 }
