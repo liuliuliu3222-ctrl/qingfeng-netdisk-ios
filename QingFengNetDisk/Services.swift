@@ -113,10 +113,9 @@ final class TransferStore: ObservableObject {
         tasks.removeAll { $0.id == id }
     }
 
-    /// 清空全部任务：删除所有已落盘的本地文件，再清空列表
+    /// 清空全部任务：仅清空传输记录，不删除已落盘的本地文件
     func deleteAll() {
         for id in pauseControls.keys { pauseControls[id]?(false) }
-        for task in tasks { deleteLocalFile(of: task) }
         pausedIDs.removeAll()
         pauseControls.removeAll()
         tasks.removeAll()

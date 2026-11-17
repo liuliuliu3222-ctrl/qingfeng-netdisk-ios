@@ -57,7 +57,7 @@ struct TransferView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("确定删除全部传输记录及其已下载的本地文件？此操作不可恢复。")
+            Text("确定删除全部传输记录？此操作不可恢复。")
         }
     }
 
@@ -84,6 +84,7 @@ struct TransferView: View {
             // 顺序：删除、刷新（暂停功能已去掉，改由点任务本身暂停）
             HStack(spacing: 0) {
                 transferIconButton(icon: "trash") {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     showClearConfirm = true
                 }
                 SpinningRefreshIcon(tint: MD3.primary, size: 16, hitSize: 34) {

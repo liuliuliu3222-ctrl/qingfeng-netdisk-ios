@@ -297,7 +297,7 @@ struct FilesView: View {
                         // 轻点打开、长按弹出居中系统操作菜单（与右侧三点菜单内容一致）。
                         // 长按用 simultaneousGesture 与 ScrollView 滚动共存、不抢占优先级；
                         // maximumDistance 让滑动超过 10pt 时手势自动失败，滚动/下拉刷新照常；
-                        // 不绑定 .updating 驱动按压变灰，因此滑动时不会「一滑就变灰」。
+                        // 按住变淡由 .updating 驱动，只有按满时长才变淡，滑动会自动复位不误变灰。
                         FileActionRow(
                             file: file,
                             onTap: { open(file) },
@@ -574,18 +574,22 @@ struct FilesView: View {
 /// - 长按用 `simultaneousGesture`：与父级 ScrollView 滚动手势共存、不抢占优先级，
 ///   手指按在文件上滑动时页面照常滚动、下拉刷新照常工作。
 /// - `LongPressGesture(maximumDistance:)`：滑动超过 10pt 即判为滚动、长按自动失败，
-///   因此滑动不会误弹菜单。不绑定 `.updating` 变灰，滑动也不会「一滑就变灰」。
+///   因此滑动不会误弹菜单。
+/// - 按住变淡由 `.updating($pressing)` 驱动：只有按住达到 minimumDuration 后 pressing 才为 true，
+///   手指一滑（超过 10pt）手势失败会自动复位为 false，所以滑动不会「一滑就变灰」；
+///   这与切换账号页账号行按压变淡是同一套机制。
 /// - 长按命中后 `suppressTap` 吞掉随之而来的那次点击，避免松手误打开/误进文件夹。
 private struct FileActionRow: View {
     let file: QFFile
     let onTap: () -> Void
     let onLongPress: () -> Void
 
+    @GestureState private var pressing = false
     @State private var suppressTap = false
 
     var body: some View {
         HStack(spacing: 0) {
-            FileRow(file: file, showsChevron: false)
+            FileRow(file: file, showsChevron: false, dimmed: pressing)
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
@@ -598,6 +602,7 @@ private struct FileActionRow: View {
         }
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
+                .updating($pressing) { value, state, _ in state = value }
                 .onEnded { _ in
                     suppressTap = true
                     onLongPress()
