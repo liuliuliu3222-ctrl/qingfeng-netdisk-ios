@@ -276,7 +276,7 @@ final class ApiClient {
     /// - onControl: 传出下载暂停控制器，参数 true=暂停(suspend)、false=恢复(resume)。
     ///   供传输页点任务本身实现「真实暂停」——直接挂起底层 URLSession 下载任务。
     func download(id: Int, to destination: URL, progress: ((Int64, Int64) -> Void)?,
-                  onControl: (((Bool) -> Void)) -> Void = { _ in }) async throws {
+                  onControl: ((@escaping (Bool) -> Void)) -> Void = { _ in }) async throws {
         let request = try makeRequest("GET", path: "/api/files/download/\(id)")
         let kit = DownloadKit(destination: destination, onProgress: progress)
         onControl { paused in
