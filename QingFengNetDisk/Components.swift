@@ -6,6 +6,8 @@ struct FileRow: View {
 
     let file: QFFile
     var showsChevron: Bool = true
+    /// 长按时文件名轻微变淡（与切换账号账号行、首页最近使用的按压观感一致）
+    var dimmed: Bool = false
 
     @State private var thumbnail: UIImage?
 
@@ -17,6 +19,8 @@ struct FileRow: View {
                 Text(file.name)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(MD3.onSurface)
+                    .opacity(dimmed ? 0.45 : 1.0)
+                    .animation(.easeOut(duration: 0.12), value: dimmed)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(subtitle)

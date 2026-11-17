@@ -106,13 +106,14 @@ struct TrashView: View {
         }
         .animation(.easeOut(duration: 0.2), value: toast.message)
         .task { await load() }
-        .confirmationDialog("彻底删除", isPresented: $showPurgeConfirm, titleVisibility: .visible) {
+        // 彻底删除确认：系统原生居中弹窗（与设置页退出登录一致），文案/按钮不变
+        .alert("彻底删除", isPresented: $showPurgeConfirm) {
             Button("删除", role: .destructive) { performPurge() }
             Button("取消", role: .cancel) {}
         } message: {
             Text("确定彻底删除「\(purgeTarget?.name ?? "")」？删除后不可恢复，空间将释放。")
         }
-        .confirmationDialog("清空回收站", isPresented: $showEmptyConfirm, titleVisibility: .visible) {
+        .alert("清空回收站", isPresented: $showEmptyConfirm) {
             Button("全部删除", role: .destructive) { emptyTrash() }
             Button("取消", role: .cancel) {}
         } message: {

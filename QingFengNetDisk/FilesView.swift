@@ -73,6 +73,12 @@ struct FilesView: View {
     @State private var deleteTarget: QFFile?
     @State private var showDeleteConfirm = false
 
+    /// 文件行长按操作（居中系统 alert，与账号删除确认一致）
+    @State private var menuTarget: QFFile?
+    @State private var showFileMenu = false
+    /// 当前被按住的文件行 id，驱动文件名按压变淡（与账号行观感一致）
+    @State private var pressedFileId: Int?
+
     @State private var shareTarget: QFFile?
     @State private var sharePassword = ""
     @State private var showShare = false
@@ -80,6 +86,8 @@ struct FilesView: View {
     /// 文件夹导航方向：进入子页为前向（新页从右滑入、旧页向左滑出），
     /// 返回为后向（父页从左滑入、子页向右滑出）。配合 250ms 原生转场。
     @State private var navigatingForward = true
+    /// 切换文件夹期间为 true：新页先显示中性占位，避免旧目录文件闪现、也避免空态文案误闪。
+    @State private var folderSwitching = false
 
     private var currentParentId: Int? { stack.last?.folderId }
 
@@ -125,7 +133,11 @@ struct FilesView: View {
             ZStack(alignment: .top) {
                 ScrollView {
                     VStack(spacing: 12) {
-                        if items.isEmpty && !loading {
+                        if folderSwitching {
+                            // 文件夹刚切换、数据尚未回来：显示中性占位，
+                            // 既不闪现上一页旧文件，也不误闪"文件夹是空的"文案。
+                            Color.clear.frame(height: 320)
+                        } else if items.isEmpty && !loading {
                             MDEmptyState(icon: searchMode ? "magnifyingglass" : "folder",
                                          title: searchMode ? "没有匹配的文件" : "这个文件夹还是空的",
                                          detail: searchMode ? nil : "点右下角按钮上传文件，或新建文件夹")
@@ -198,6 +210,35 @@ struct FilesView: View {
         } message: {
             Text("将生成分享链接并复制到剪贴板")
         }
+        // 文件长按操作菜单：系统原生居中弹窗（与切换账号删除确认一致），
+        // 菜单项复用 fileMenuContent 的同一份逻辑，功能/文案完全不变。
+        .alert("文件操作", isPresented: $showFileMenu, presenting: menuTarget) { file in
+            if file.isFolder {
+                Button("打开") { open(file) }
+            } else {
+                Button("预览 / 下载") { previewTarget = file }
+            }
+            Button("分享链接") {
+                shareTarget = file
+                sharePassword = ""
+                showShare = true
+            }
+            Button("重命名") {
+                renameTarget = file
+                renameText = file.name
+                showRename = true
+            }
+            Button("删除", role: .destructive) {
+                // 稍延迟，等操作菜单收起后再弹居中删除确认，避免呈现冲突
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    deleteTarget = file
+                    showDeleteConfirm = true
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: { file in
+            Text(file.name)
+        }
         // 删除确认弹窗：系统原生居中弹窗（与设置页退出登录一致），文案/按钮/执行逻辑不变
         .alert("删除确认", isPresented: $showDeleteConfirm) {
             Button("移入回收站", role: .destructive) { performDelete() }
@@ -255,16 +296,38 @@ struct FilesView: View {
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, file in
                     ZStack(alignment: .trailing) {
-                        // 点击整行=打开/预览（primaryAction）；长按=弹出系统菜单。
-                        // 使用 Menu 而非 contextMenu：长按不会有放大预览/遮罩/褶皱，
-                        // 按上去只有系统按压的轻微变淡，与首页「最近使用」的观感一致。
-                        Menu {
-                            fileMenuContent(for: file)
-                        } label: {
-                            FileRow(file: file, showsChevron: false)
-                        } primaryAction: {
-                            open(file)
+                        // 与切换账号账号行完全同款的纯手势结构：
+                        // 点击整行=打开/预览；长按=弹出居中系统操作菜单；按住=文件名轻微变淡。
+                        // 不再用 Menu + primaryAction：Menu 长按底层是 contextMenu（放大+遮罩+褶皱），
+                        // 且松手会误触发 primaryAction 打开/进入子页，导致文件看起来"消失"。
+                        HStack(spacing: 0) {
+                            FileRow(file: file,
+                                    showsChevron: false,
+                                    dimmed: pressedFileId == file.id)
+                            Spacer(minLength: 0)
                         }
+                        .contentShape(Rectangle())
+                        .onTapGesture { open(file) }
+                        // 高优先级长按：命中时震动并弹居中操作菜单，压制 tap 避免误打开。
+                        .highPriorityGesture(
+                            LongPressGesture(minimumDuration: 0.5)
+                                .onEnded { _ in
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    menuTarget = file
+                                    showFileMenu = true
+                                    pressedFileId = nil
+                                }
+                        )
+                        // 按住即让文件名变淡、松手恢复，不干扰 tap / 长按。
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in
+                                    if pressedFileId != file.id { pressedFileId = file.id }
+                                }
+                                .onEnded { _ in
+                                    if pressedFileId == file.id { pressedFileId = nil }
+                                }
+                        )
 
                         // 右侧三点：点击直接弹出与长按完全一致的操作菜单，对齐本行
                         Menu {
@@ -339,10 +402,14 @@ struct FilesView: View {
                 searchMode = false
                 stack = [FolderPath(folderId: nil, name: "全部文件")]
             }
-            // 进入子页：前向转场（新页从右滑入），250ms 原生时长
+            // 进入子页：前向转场（新页从右滑入），250ms 原生时长。
+            // 同一事务内清空旧目录数据并进入切换态：新页先渲染空白占位，
+            // 不会拿上一页的 items 闪现；load 回来后再填新数据。
             navigatingForward = true
             withAnimation(.easeInOut(duration: 0.25)) {
                 stack.append(FolderPath(folderId: file.id, name: file.name))
+                items = []
+                folderSwitching = true
             }
             Task { await load(parentId: currentParentId) }
         } else {
@@ -352,10 +419,13 @@ struct FilesView: View {
 
     private func goBack() {
         guard stack.count > 1 else { return }
-        // 返回父页：后向转场（新页从左滑入、子页向右滑出）
+        // 返回父页：后向转场（新页从左滑入、子页向右滑出）。
+        // 同样清空当前（子目录）数据并进入切换态，避免返回时旧内容闪现。
         navigatingForward = false
         withAnimation(.easeInOut(duration: 0.25)) {
             stack.removeLast()
+            items = []
+            folderSwitching = true
         }
         Task { await load(parentId: currentParentId) }
     }
@@ -376,6 +446,9 @@ struct FilesView: View {
             // 读取失败（含系统取消）：保留现有列表，绝不清空，也不弹任何提示
         }
         loading = false
+        // 文件夹切换的数据已（尝试）加载完成，结束切换态，让新页内容显示出来。
+        // 与转场动画同时收尾，避免占位停留过久。
+        withAnimation(.easeOut(duration: 0.12)) { folderSwitching = false }
     }
 
     private func reload() async {

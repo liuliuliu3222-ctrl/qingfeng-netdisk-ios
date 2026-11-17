@@ -473,8 +473,8 @@ struct SpinningRefreshIcon: View {
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(tint)
             .rotationEffect(.degrees(turns * 360))
-            // 匀速转完这一圈（0.39s），到整圈角度后自然停止
-            .animation(.linear(duration: 0.39), value: turns)
+            // 匀速转完这一圈（0.32s），到整圈角度后自然停止
+            .animation(.linear(duration: 0.32), value: turns)
             .frame(width: hitSize, height: hitSize)
             .contentShape(Rectangle())
             .onTapGesture { start() }
@@ -488,7 +488,7 @@ struct SpinningRefreshIcon: View {
         // 角度单调递增一整圈，永远向前转、停在原位，不做归零（避免反向回转）
         turns += 1
         Task {
-            try? await Task.sleep(nanoseconds: 430_000_000)
+            try? await Task.sleep(nanoseconds: 360_000_000)
             spinning = false
             // 转圈结束（刷新动画完成）给出触感反馈，四页共用组件自动生效
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
