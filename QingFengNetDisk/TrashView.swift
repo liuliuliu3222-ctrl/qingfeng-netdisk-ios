@@ -105,11 +105,10 @@ struct TrashView: View {
         }
         .animation(.easeOut(duration: 0.2), value: toast.message)
         .task { await load() }
-        // 彻底删除确认：系统原生居中弹窗（与设置页退出登录一致），文案/按钮不变
-        // 回收站文件行长按操作：系统原生居中弹窗（还原 / 彻底删除）
+        // 回收站文件行长按操作：系统原生居中弹窗（还原 / 删除 / 取消）
         .alert("文件操作", isPresented: $showTrashItemMenu, presenting: restoreTarget) { file in
             Button("还原") { restore(file) }
-            Button("彻底删除", role: .destructive) {
+            Button("删除", role: .destructive) {
                 // 稍延迟，等操作菜单收起后再弹彻底删除确认，避免呈现冲突
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     purgeTarget = file
