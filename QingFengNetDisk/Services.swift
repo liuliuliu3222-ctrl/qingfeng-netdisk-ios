@@ -14,6 +14,8 @@ final class TransferStore: ObservableObject {
 
     /// 被暂停的任务 id。上传/下载协程在每步推进前查询，暂停时原地挂起等待恢复。
     private var pausedIDs: Set<UUID> = []
+    /// 单个任务的底层暂停控制器（下载=suspend/resume URLSessionTask；上传靠 pausedIDs 轮询）
+    private var pauseControls: [UUID: (Bool) -> Void] = [:]
     private let maxKeep = 50
 
     private init() {}
@@ -49,6 +51,7 @@ final class TransferStore: ObservableObject {
         tasks[index].message = message
         if state == .done {
             tasks[index].done = tasks[index].total
+            pauseControls.removeValue(forKey: id)
         }
     }
 
@@ -64,19 +67,27 @@ final class TransferStore: ObservableObject {
 
     func isPaused(_ id: UUID) -> Bool { pausedIDs.contains(id) }
 
-    /// 暂停所有进行中的任务（UI 立即显示「已暂停」，进度冻结）
-    func pauseAll() {
-        for index in tasks.indices where tasks[index].state == .running {
-            tasks[index].state = .paused
-            pausedIDs.insert(tasks[index].id)
-        }
+    /// 注册单个任务的底层暂停控制器（由下载协程回调）
+    func registerPauseControl(id: UUID, control: @escaping (Bool) -> Void) {
+        pauseControls[id] = control
+        // 若注册前任务已被暂停，立即补上暂停动作
+        if pausedIDs.contains(id) { control(true) }
     }
 
-    /// 恢复所有暂停的任务回到进行中
-    func resumeAll() {
-        for index in tasks.indices where tasks[index].state == .paused {
+    /// 点任务本身：切换该任务的暂停/恢复，真实作用于底层传输
+    func togglePause(id: UUID) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        let task = tasks[index]
+        // 只有进行中或已暂停的任务可切换；已完成/失败的点了无反应
+        guard task.state == .running || task.state == .paused else { return }
+        if task.state == .running {
+            tasks[index].state = .paused
+            pausedIDs.insert(id)
+            pauseControls[id]?(true)   // 下载：suspend；上传：靠 pausedIDs 轮询挂起
+        } else {
             tasks[index].state = .running
-            pausedIDs.remove(tasks[index].id)
+            pausedIDs.remove(id)
+            pauseControls[id]?(false)  // 下载：resume
         }
     }
 
@@ -94,15 +105,20 @@ final class TransferStore: ObservableObject {
     /// 删除单个任务：先删除已落盘的本地文件，再从列表移除
     func delete(id: UUID) {
         guard let task = tasks.first(where: { $0.id == id }) else { return }
+        // 删除前先恢复底层传输（避免 suspended 的下载悬挂），再移除记录
+        pauseControls[id]?(false)
         deleteLocalFile(of: task)
         pausedIDs.remove(id)
+        pauseControls.removeValue(forKey: id)
         tasks.removeAll { $0.id == id }
     }
 
     /// 清空全部任务：删除所有已落盘的本地文件，再清空列表
     func deleteAll() {
+        for id in pauseControls.keys { pauseControls[id]?(false) }
         for task in tasks { deleteLocalFile(of: task) }
         pausedIDs.removeAll()
+        pauseControls.removeAll()
         tasks.removeAll()
     }
 
@@ -209,11 +225,19 @@ enum Downloader {
         let taskId = await TransferStore.shared.begin(kind: .download, name: file.name, total: file.size)
         await TransferStore.shared.setLocalPath(id: taskId, path: target.path)
         do {
-            try await ApiClient.shared.download(id: file.id, to: target) { done, total in
-                Task { @MainActor in
-                    TransferStore.shared.update(id: taskId, done: done, total: total)
+            try await ApiClient.shared.download(id: file.id, to: target,
+                progress: { done, total in
+                    Task { @MainActor in
+                        TransferStore.shared.update(id: taskId, done: done, total: total)
+                    }
+                },
+                onControl: { control in
+                    // 把底层下载的真实暂停/恢复句柄注册到任务，点任务本身时调用
+                    Task { @MainActor in
+                        await TransferStore.shared.registerPauseControl(id: taskId, control: control)
+                    }
                 }
-            }
+            )
             await TransferStore.shared.finish(id: taskId, state: .done, message: "")
             Notifier.post(title: "下载完成", body: file.name)
             return target

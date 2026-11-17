@@ -294,10 +294,10 @@ struct FilesView: View {
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, file in
                     ZStack(alignment: .trailing) {
-                        // 按压变淡 + 长按菜单 + 轻点打开，交给独立子视图处理。
-                        // 按压态由 LongPressGesture.updating 驱动 @GestureState：
-                        // 按住时文件名变淡（与切换账号视频观感一致），手指一滑即被系统判为滚动、
-                        // 手势失败会自动复位，既不拦截 ScrollView、也不误变灰，下拉刷新照常工作。
+                        // 轻点打开、长按弹出居中系统操作菜单（与右侧三点菜单内容一致）。
+                        // 长按用 simultaneousGesture 与 ScrollView 滚动共存、不抢占优先级；
+                        // maximumDistance 让滑动超过 10pt 时手势自动失败，滚动/下拉刷新照常；
+                        // 不绑定 .updating 驱动按压变灰，因此滑动时不会「一滑就变灰」。
                         FileActionRow(
                             file: file,
                             onTap: { open(file) },
@@ -308,7 +308,7 @@ struct FilesView: View {
                             }
                         )
 
-                        // 右侧三点：点击直接弹出与长按完全一致的操作菜单，对齐本行
+                        // 右侧三点：点击弹出操作菜单（标题/重命名/分享/删除），对齐本行
                         Menu {
                             fileMenuContent(for: file)
                         } label: {
@@ -567,49 +567,42 @@ struct FilesView: View {
     }
 }
 
-/// 文件行交互：轻点打开、长按弹菜单、按住时文件名轻微变淡。
+/// 文件行交互：轻点打开/预览，长按弹出居中系统操作菜单。
 ///
-/// 关键点：按压变淡用 `LongPressGesture.updating` 驱动 `@GestureState`，而不是
-/// `DragGesture(minimumDistance: 0)`。后者手指一落就激活，会抢占 ScrollView 的滚动手势，
-/// 造成「列表滑不动 / 下拉刷新失效 / 一滑文件名就变灰」。
-/// LongPressGesture 只认「按住不动」，一旦手指移动，系统判为滚动，手势失败、
-/// `@GestureState` 自动复位为 false，文件名瞬间恢复，滚动与下拉刷新完全不受影响。
+/// 关键设计（兼顾「长按要有菜单」与「滑动要顺畅」）：
+/// - 用 `onTapGesture` 处理轻点，而不是把长按挂在 Button 上，避免 Button 按压态干扰。
+/// - 长按用 `simultaneousGesture`：与父级 ScrollView 滚动手势共存、不抢占优先级，
+///   手指按在文件上滑动时页面照常滚动、下拉刷新照常工作。
+/// - `LongPressGesture(maximumDistance:)`：滑动超过 10pt 即判为滚动、长按自动失败，
+///   因此滑动不会误弹菜单。不绑定 `.updating` 变灰，滑动也不会「一滑就变灰」。
+/// - 长按命中后 `suppressTap` 吞掉随之而来的那次点击，避免松手误打开/误进文件夹。
 private struct FileActionRow: View {
     let file: QFFile
     let onTap: () -> Void
     let onLongPress: () -> Void
 
-    @GestureState private var pressing = false
-    /// 长按命中后吞掉随之而来的那次点击，避免误打开/误进入文件夹
     @State private var suppressTap = false
 
     var body: some View {
-        // 与首页「最近使用」一致：点击交给原生 Button，滚动/下拉刷新完全不受影响。
-        Button {
+        HStack(spacing: 0) {
+            FileRow(file: file, showsChevron: false)
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
             if suppressTap {
                 suppressTap = false
                 return
             }
             onTap()
-        } label: {
-            HStack(spacing: 0) {
-                FileRow(file: file, showsChevron: false, dimmed: pressing)
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        // 用 simultaneousGesture 而非 highPriorityGesture：不抢占父级 ScrollView 的滚动手势，
-        // 手指按在文件上滑动时页面照常上下滚动、下拉刷新照常工作；只有按住不动才命中长按。
-        // 一旦手指移动超过 10pt，LongPressGesture 失败、pressing 自动复位，不会误变灰/误弹菜单。
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.5, maximumDistance: 10)
-                .updating($pressing) { value, state, _ in state = value }
                 .onEnded { _ in
                     suppressTap = true
                     onLongPress()
-                    // 兜底：alert 弹出时 Button 的 tap 可能不会回调，超时后清除避免吞掉下次正常点击
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    // 兜底清除：alert 弹出时 tap 回调可能不会抵达，避免吞掉下次正常点击
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         suppressTap = false
                     }
                 }

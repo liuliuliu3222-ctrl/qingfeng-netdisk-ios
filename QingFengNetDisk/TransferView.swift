@@ -6,16 +6,10 @@ struct TransferView: View {
 
     @State private var kind: TransferTask.Kind = .upload
 
-    /// 删除单个任务的确认目标（长按任务行触发）
-    @State private var deleteTarget: TransferTask?
-    @State private var showDeleteConfirm = false
     /// 清空全部任务的确认
     @State private var showClearConfirm = false
 
     private var visibleTasks: [TransferTask] { store.items(kind: kind) }
-
-    /// 是否还有进行中的任务，决定暂停按钮显示「暂停」还是「继续」
-    private var hasRunning: Bool { store.runningCount() > 0 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,16 +30,6 @@ struct TransferView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
                                     taskRow(task)
-                                    .contentShape(Rectangle())
-                                    // 长按任务本身弹系统居中删除确认，与文件页观感一致
-                                    .highPriorityGesture(
-                                        LongPressGesture(minimumDuration: 0.5)
-                                            .onEnded { _ in
-                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                                deleteTarget = task
-                                                showDeleteConfirm = true
-                                            }
-                                    )
                                     if index < visibleTasks.count - 1 {
                                         Divider()
                                             .overlay(MD3.outlineVariant)
@@ -65,19 +49,15 @@ struct TransferView: View {
             }
         }
         .background(MD3.background.ignoresSafeArea())
-        // 暂停 / 继续 / 清空全部：系统居中弹窗，与全局删除风格一致
-        .alert("清空传输列表", isPresented: $showClearConfirm) {
-            Button("全部删除", role: .destructive) { store.deleteAll() }
+        // 清空全部：系统居中弹窗；确认后给小提示反馈
+        .alert("全部删除", isPresented: $showClearConfirm) {
+            Button("全部删除", role: .destructive) {
+                store.deleteAll()
+                ToastCentre.shared.show("已删除全部传输任务")
+            }
             Button("取消", role: .cancel) {}
         } message: {
             Text("确定删除全部传输记录及其已下载的本地文件？此操作不可恢复。")
-        }
-        // 长按单个任务：系统居中弹窗确认是否删除该任务
-        .alert("删除任务", isPresented: $showDeleteConfirm, presenting: deleteTarget) { task in
-            Button("删除", role: .destructive) { store.delete(id: task.id) }
-            Button("取消", role: .cancel) {}
-        } message: { task in
-            Text("确定删除任务「\(task.name)」及其本地文件？")
         }
     }
 
@@ -101,19 +81,8 @@ struct TransferView: View {
                 .buttonStyle(.plain)
             }
             Spacer(minLength: 4)
-            // 顺序：暂停、删除、刷新。三个图标统一规格：size 16 / 品牌绿 / 34×34 热区，
-            // 与刷新图标完全同款风格。
+            // 顺序：删除、刷新（暂停功能已去掉，改由点任务本身暂停）
             HStack(spacing: 0) {
-                // 暂停：固定两个竖棍 pause.fill，不再显示播放三角。
-                // 有进行中任务时点击暂停全部；都已暂停时点击恢复（图标始终不变）。
-                transferIconButton(icon: "pause.fill") {
-                    if hasRunning {
-                        store.pauseAll()
-                    } else {
-                        store.resumeAll()
-                    }
-                }
-                // 删除：删除全部（本地文件 + 列表记录），带居中确认
                 transferIconButton(icon: "trash") {
                     showClearConfirm = true
                 }
@@ -139,29 +108,36 @@ struct TransferView: View {
     }
 
     private func taskRow(_ task: TransferTask) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(task.state == .failed ? MD3.errorContainer : MD3.primaryContainer)
-                    .frame(width: 42, height: 42)
-                Image(systemName: task.kind.symbol)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(task.state == .failed ? MD3.error : MD3.primary)
-            }
+        Button {
+            // 点任务本身：切换该任务的暂停/恢复，真实作用于底层传输
+            store.togglePause(id: task.id)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(task.state == .failed ? MD3.errorContainer : MD3.primaryContainer)
+                        .frame(width: 42, height: 42)
+                    Image(systemName: task.kind.symbol)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(task.state == .failed ? MD3.error : MD3.primary)
+                }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(task.name)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(MD3.onSurface)
-                    .lineLimit(1)
-                ProgressView(value: Double(task.percent), total: 100)
-                    .tint(task.state == .failed ? MD3.error : MD3.primary)
-                Text(task.statusText)
-                    .font(.system(size: 11))
-                    .foregroundStyle(task.state == .failed ? MD3.error : MD3.onSurfaceVariant)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(task.name)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(MD3.onSurface)
+                        .lineLimit(1)
+                    ProgressView(value: Double(task.percent), total: 100)
+                        .tint(task.state == .failed ? MD3.error : MD3.primary)
+                    Text(task.statusText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(task.state == .failed ? MD3.error : MD3.onSurfaceVariant)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .buttonStyle(.plain)
     }
 }

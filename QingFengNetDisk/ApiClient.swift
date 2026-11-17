@@ -273,9 +273,15 @@ final class ApiClient {
 
     // MARK: - 下载与预览
 
-    func download(id: Int, to destination: URL, progress: ((Int64, Int64) -> Void)?) async throws {
+    /// - onControl: 传出下载暂停控制器，参数 true=暂停(suspend)、false=恢复(resume)。
+    ///   供传输页点任务本身实现「真实暂停」——直接挂起底层 URLSession 下载任务。
+    func download(id: Int, to destination: URL, progress: ((Int64, Int64) -> Void)?,
+                  onControl: (((Bool) -> Void)) -> Void = { _ in }) async throws {
         let request = try makeRequest("GET", path: "/api/files/download/\(id)")
         let kit = DownloadKit(destination: destination, onProgress: progress)
+        onControl { paused in
+            if paused { kit.pause() } else { kit.resume() }
+        }
         try await kit.start(request: request)
     }
 
@@ -357,6 +363,7 @@ private final class DownloadKit: NSObject, URLSessionDownloadDelegate {
     private let onProgress: ((Int64, Int64) -> Void)?
     private var continuation: CheckedContinuation<Void, Error>?
     private var session: URLSession?
+    private var downloadTask: URLSessionDownloadTask?
     private var pendingError: Error?
 
     init(destination: URL, onProgress: ((Int64, Int64) -> Void)?) {
@@ -372,9 +379,15 @@ private final class DownloadKit: NSObject, URLSessionDownloadDelegate {
             configuration.timeoutIntervalForResource = 3600
             let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
             self.session = session
-            session.downloadTask(with: request).resume()
+            let task = session.downloadTask(with: request)
+            self.downloadTask = task
+            task.resume()
         }
     }
+
+    /// 真实暂停/恢复底层下载任务
+    func pause() { downloadTask?.suspend() }
+    func resume() { downloadTask?.resume() }
 
     func urlSession(_ session: URLSession,
                     downloadTask: URLSessionDownloadTask,
